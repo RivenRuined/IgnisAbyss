@@ -37,7 +37,7 @@ let simulationRunning = true;
 let controlPanel, row1, row2, row3, row4;
 let spawnBtn, huntBtn, burstBtn, novaBtn;
 let aggressionInput, gravityInput, moveSpeedInput;
-let novaMeter, novaCooldownMeter, abyssMeter, huntMeter;
+let novaMeter, novaCooldownMeter, huntMeter, abyssMeter;
 let titleSpan;
 
 // ---------------- Setup ----------------
@@ -80,7 +80,7 @@ function setup() {
   `);
   novaCooldownCSS.parent(document.head);
   
-  // --- Updated Control Panel Layout ---
+  // --- Control Panel Layout ---
   controlPanel = createDiv();
   controlPanel.style("position", "absolute");
   controlPanel.style("bottom", "20px");
@@ -93,7 +93,7 @@ function setup() {
   controlPanel.style("text-align", "center");
   controlPanel.style("padding", "10px 0");
   
-  // Row 1: Buttons & Numeric Inputs
+  // Tier 1: Numeric Inputs for Aggression, Gravity & Speed
   row1 = createDiv();
   row1.parent(controlPanel);
   row1.style("display", "flex");
@@ -102,25 +102,8 @@ function setup() {
   row1.style("flex-wrap", "wrap");
   row1.style("margin-bottom", "10px");
   
-  spawnBtn = createButton("Spawn");
-  spawnBtn.parent(row1);
-  spawnBtn.style("font-size", "24px");
-  spawnBtn.style("margin", "5px");
-  spawnBtn.style("background-color", "#202325");
-  spawnBtn.style("color", "#9C89B8");
-  spawnBtn.mousePressed(() => spawnTendrils(5));
-  
-  huntBtn = createButton("Hunt");
-  huntBtn.parent(row1);
-  huntBtn.style("font-size", "24px");
-  huntBtn.style("margin", "5px");
-  huntBtn.style("background-color", "#202325");
-  huntBtn.style("color", "#9C89B8");
-  huntBtn.mousePressed(triggerHunt);
-  
   let aggressionLabel = createDiv("Aggression");
   aggressionLabel.parent(row1);
-  aggressionLabel.style("display", "inline-block");
   aggressionLabel.style("font-size", "24px");
   aggressionLabel.style("margin", "5px");
   
@@ -133,7 +116,6 @@ function setup() {
   
   let gravityLabel = createDiv("Gravity");
   gravityLabel.parent(row1);
-  gravityLabel.style("display", "inline-block");
   gravityLabel.style("font-size", "24px");
   gravityLabel.style("margin", "5px");
   
@@ -144,12 +126,12 @@ function setup() {
   gravityInput.style("margin", "5px");
   gravityInput.attribute("step", "0.1");
   
-  let moveLabel = createDiv("Movement");
-  moveLabel.parent(row1);
-  moveLabel.style("display", "inline-block");
-  moveLabel.style("font-size", "24px");
-  moveLabel.style("margin", "5px");
+  let speedLabel = createDiv("Speed");
+  speedLabel.parent(row1);
+  speedLabel.style("font-size", "24px");
+  speedLabel.style("margin", "5px");
   
+  // Note: moveSpeedInput now represents Speed.
   moveSpeedInput = createInput('1.95', 'number');
   moveSpeedInput.parent(row1);
   moveSpeedInput.style("font-size", "24px");
@@ -157,8 +139,33 @@ function setup() {
   moveSpeedInput.style("margin", "5px");
   moveSpeedInput.attribute("step", "0.1");
   
+  // Tier 2: Control Buttons
+  row2 = createDiv();
+  row2.parent(controlPanel);
+  row2.style("display", "flex");
+  row2.style("justify-content", "center");
+  row2.style("align-items", "center");
+  row2.style("flex-wrap", "wrap");
+  row2.style("margin-bottom", "10px");
+  
+  spawnBtn = createButton("Spawn");
+  spawnBtn.parent(row2);
+  spawnBtn.style("font-size", "24px");
+  spawnBtn.style("margin", "5px");
+  spawnBtn.style("background-color", "#202325");
+  spawnBtn.style("color", "#9C89B8");
+  spawnBtn.mousePressed(() => spawnTendrils(5));
+  
+  huntBtn = createButton("Hunt");
+  huntBtn.parent(row2);
+  huntBtn.style("font-size", "24px");
+  huntBtn.style("margin", "5px");
+  huntBtn.style("background-color", "#202325");
+  huntBtn.style("color", "#9C89B8");
+  huntBtn.mousePressed(triggerHunt);
+  
   burstBtn = createButton("Burst");
-  burstBtn.parent(row1);
+  burstBtn.parent(row2);
   burstBtn.style("font-size", "24px");
   burstBtn.style("margin", "5px");
   burstBtn.style("background-color", "#202325");
@@ -166,7 +173,7 @@ function setup() {
   burstBtn.mousePressed(triggerRepel);
   
   novaBtn = createButton("Nova");
-  novaBtn.parent(row1);
+  novaBtn.parent(row2);
   novaBtn.style("font-size", "24px");
   novaBtn.style("margin", "5px");
   novaBtn.style("background-color", "#202325");
@@ -178,17 +185,17 @@ function setup() {
     } 
   });
   
-  // Row 2: Nova Meter & Nova Cooldown Meter
-  row2 = createDiv();
-  row2.parent(controlPanel);
-  row2.style("display", "flex");
-  row2.style("justify-content", "center");
-  row2.style("align-items", "center");
-  row2.style("flex-wrap", "wrap");
-  row2.style("gap", "20px");
+  // Tier 3: All Four Meters in One Row
+  row3 = createDiv();
+  row3.parent(controlPanel);
+  row3.style("display", "flex");
+  row3.style("justify-content", "center");
+  row3.style("align-items", "center");
+  row3.style("flex-wrap", "wrap");
+  row3.style("gap", "20px");
   
   novaMeter = createElement('meter');
-  novaMeter.parent(row2);
+  novaMeter.parent(row3);
   novaMeter.attribute("min", "0");
   novaMeter.attribute("max", NOVA_THRESHOLD.toString());
   novaMeter.attribute("value", "0");
@@ -197,22 +204,13 @@ function setup() {
   novaMeter.style("height", "30px");
   
   novaCooldownMeter = createElement('meter');
-  novaCooldownMeter.parent(row2);
+  novaCooldownMeter.parent(row3);
   novaCooldownMeter.attribute("min", "0");
   novaCooldownMeter.attribute("max", NOVA_COOLDOWN_TIME.toString());
   novaCooldownMeter.attribute("value", "0");
   novaCooldownMeter.addClass("novacooldown");
   novaCooldownMeter.style("width", "300px");
   novaCooldownMeter.style("height", "30px");
-  
-  // Row 3: Hunt Meter & Abyss Meter
-  row3 = createDiv();
-  row3.parent(controlPanel);
-  row3.style("display", "flex");
-  row3.style("justify-content", "center");
-  row3.style("align-items", "center");
-  row3.style("flex-wrap", "wrap");
-  row3.style("gap", "20px");
   
   huntMeter = createElement('meter');
   huntMeter.parent(row3);
@@ -232,7 +230,7 @@ function setup() {
   abyssMeter.style("width", "300px");
   abyssMeter.style("height", "30px");
   
-  // Row 4: Title
+  // Tier 4: Title
   row4 = createDiv();
   row4.parent(controlPanel);
   row4.style("display", "flex");
@@ -243,7 +241,6 @@ function setup() {
   titleSpan = createSpan('<span style="color: rgb(255,215,0); font-size:24px;">The Ignis</span> & <span style="color: #9C89B8; font-size:24px;">The Abyss</span>');
   titleSpan.parent(row4);
   
-  // Reset simulation.
   resetSimulation();
 }
 
