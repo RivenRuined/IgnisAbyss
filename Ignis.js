@@ -1,8 +1,6 @@
 console.log("Ignis.js loaded and running!");
 
 /* 
-  Cosmic Hunt – Life vs. Death (Final Version with Hunt Meter, Keyboard Control, 
-  Multi-Activation Death Burst, Updated Defaults, Nova Cooldown, and Pulsating Ignis)
   ...
 */
 
@@ -51,34 +49,64 @@ function setup() {
   cyanColor = color(0, 255, 255);
   blackColor = color(0, 0, 0);
   
-  // --- Custom CSS for meters ---
-  let novaMeterCSS = createElement('style', `
+  // --- Add custom CSS for meters and responsive layout ---
+  // Meters
+  createElement('style', `
     meter.nova::-webkit-meter-optimum-value { background: #008B8B; }
     meter.nova::-webkit-meter-suboptimum-value { background: #008B8B; }
     meter.nova::-moz-meter-bar { background: #008B8B; }
-  `);
-  novaMeterCSS.parent(document.head);
-  
-  let abyssMeterCSS = createElement('style', `
+
     meter.abyss::-webkit-meter-optimum-value { background: #9C89B8; }
     meter.abyss::-webkit-meter-suboptimum-value { background: #9C89B8; }
     meter.abyss::-moz-meter-bar { background: #9C89B8; }
-  `);
-  abyssMeterCSS.parent(document.head);
-  
-  let huntMeterCSS = createElement('style', `
+
     meter.hunt::-webkit-meter-optimum-value { background: #7D6E93; }
     meter.hunt::-webkit-meter-suboptimum-value { background: #7D6E93; }
     meter.hunt::-moz-meter-bar { background: #7D6E93; }
-  `);
-  huntMeterCSS.parent(document.head);
-  
-  let novaCooldownCSS = createElement('style', `
+
     meter.novacooldown::-webkit-meter-optimum-value { background: #555555; }
     meter.novacooldown::-webkit-meter-suboptimum-value { background: #555555; }
     meter.novacooldown::-moz-meter-bar { background: #555555; }
-  `);
-  novaCooldownCSS.parent(document.head);
+  `).parent(document.head);
+
+  // Responsive layout
+  createElement('style', `
+    /* Base style for rows */
+    .row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    /* Meters get 300px wide by default */
+    .meterRes {
+      width: 300px;
+      height: 30px;
+    }
+    /* On narrower screens, stack vertically & shrink font sizes */
+    @media (max-width: 600px) {
+      .row {
+        flex-direction: column;
+        margin-bottom: 5px;
+      }
+      .meterRes {
+        width: 90%;  /* let them scale to container width */
+        max-width: 400px;
+        margin-top: 5px;
+      }
+      .btnRes {
+        font-size: 18px;
+      }
+      .labelRes {
+        font-size: 18px;
+      }
+      .inputRes {
+        font-size: 18px;
+        width: 60px;
+      }
+    }
+  `).parent(document.head);
   
   // --- Control Panel Layout ---
   controlPanel = createDiv();
@@ -93,88 +121,74 @@ function setup() {
   controlPanel.style("text-align", "center");
   controlPanel.style("padding", "10px 0");
   
-  // Tier 1: Numeric Inputs for Aggression, Gravity & Speed
-  row1 = createDiv();
+  // Tier 1: Numeric Inputs
+  row1 = createDiv().addClass("row");
   row1.parent(controlPanel);
-  row1.style("display", "flex");
-  row1.style("justify-content", "center");
-  row1.style("align-items", "center");
-  row1.style("flex-wrap", "wrap");
-  row1.style("margin-bottom", "10px");
-  
+
   let aggressionLabel = createDiv("Aggression");
+  aggressionLabel.addClass("labelRes");
   aggressionLabel.parent(row1);
-  aggressionLabel.style("font-size", "24px");
   aggressionLabel.style("margin", "5px");
-  
+
   aggressionInput = createInput('1.7', 'number');
+  aggressionInput.addClass("inputRes");
   aggressionInput.parent(row1);
-  aggressionInput.style("font-size", "24px");
-  aggressionInput.style("width", "80px");
   aggressionInput.style("margin", "5px");
   aggressionInput.attribute("step", "0.1");
   
   let gravityLabel = createDiv("Gravity");
+  gravityLabel.addClass("labelRes");
   gravityLabel.parent(row1);
-  gravityLabel.style("font-size", "24px");
   gravityLabel.style("margin", "5px");
   
   gravityInput = createInput('1.5', 'number');
+  gravityInput.addClass("inputRes");
   gravityInput.parent(row1);
-  gravityInput.style("font-size", "24px");
-  gravityInput.style("width", "80px");
   gravityInput.style("margin", "5px");
   gravityInput.attribute("step", "0.1");
   
   let speedLabel = createDiv("Speed");
+  speedLabel.addClass("labelRes");
   speedLabel.parent(row1);
-  speedLabel.style("font-size", "24px");
   speedLabel.style("margin", "5px");
   
-  // Note: moveSpeedInput now represents Speed.
   moveSpeedInput = createInput('1.95', 'number');
+  moveSpeedInput.addClass("inputRes");
   moveSpeedInput.parent(row1);
-  moveSpeedInput.style("font-size", "24px");
-  moveSpeedInput.style("width", "80px");
   moveSpeedInput.style("margin", "5px");
   moveSpeedInput.attribute("step", "0.1");
   
   // Tier 2: Control Buttons
-  row2 = createDiv();
+  row2 = createDiv().addClass("row");
   row2.parent(controlPanel);
-  row2.style("display", "flex");
-  row2.style("justify-content", "center");
-  row2.style("align-items", "center");
-  row2.style("flex-wrap", "wrap");
-  row2.style("margin-bottom", "10px");
   
   spawnBtn = createButton("Spawn");
+  spawnBtn.addClass("btnRes");
   spawnBtn.parent(row2);
-  spawnBtn.style("font-size", "24px");
   spawnBtn.style("margin", "5px");
   spawnBtn.style("background-color", "#202325");
   spawnBtn.style("color", "#9C89B8");
   spawnBtn.mousePressed(() => spawnTendrils(5));
   
   huntBtn = createButton("Hunt");
+  huntBtn.addClass("btnRes");
   huntBtn.parent(row2);
-  huntBtn.style("font-size", "24px");
   huntBtn.style("margin", "5px");
   huntBtn.style("background-color", "#202325");
   huntBtn.style("color", "#9C89B8");
   huntBtn.mousePressed(triggerHunt);
   
   burstBtn = createButton("Burst");
+  burstBtn.addClass("btnRes");
   burstBtn.parent(row2);
-  burstBtn.style("font-size", "24px");
   burstBtn.style("margin", "5px");
   burstBtn.style("background-color", "#202325");
   burstBtn.style("color", "#00FFFF");
   burstBtn.mousePressed(triggerRepel);
   
   novaBtn = createButton("Nova");
+  novaBtn.addClass("btnRes");
   novaBtn.parent(row2);
-  novaBtn.style("font-size", "24px");
   novaBtn.style("margin", "5px");
   novaBtn.style("background-color", "#202325");
   novaBtn.style("color", "#00FFFF");
@@ -185,58 +199,41 @@ function setup() {
     } 
   });
   
-  // Tier 3: All Four Meters in One Row
-  row3 = createDiv();
+  // Tier 3: All Four Meters
+  row3 = createDiv().addClass("row");
   row3.parent(controlPanel);
-  row3.style("display", "flex");
-  row3.style("justify-content", "center");
-  row3.style("align-items", "center");
-  row3.style("flex-wrap", "wrap");
-  row3.style("gap", "20px");
   
   novaMeter = createElement('meter');
+  novaMeter.addClass("nova meterRes");
   novaMeter.parent(row3);
   novaMeter.attribute("min", "0");
   novaMeter.attribute("max", NOVA_THRESHOLD.toString());
   novaMeter.attribute("value", "0");
-  novaMeter.addClass("nova");
-  novaMeter.style("width", "300px");
-  novaMeter.style("height", "30px");
   
   novaCooldownMeter = createElement('meter');
+  novaCooldownMeter.addClass("novacooldown meterRes");
   novaCooldownMeter.parent(row3);
   novaCooldownMeter.attribute("min", "0");
   novaCooldownMeter.attribute("max", NOVA_COOLDOWN_TIME.toString());
   novaCooldownMeter.attribute("value", "0");
-  novaCooldownMeter.addClass("novacooldown");
-  novaCooldownMeter.style("width", "300px");
-  novaCooldownMeter.style("height", "30px");
   
   huntMeter = createElement('meter');
+  huntMeter.addClass("hunt meterRes");
   huntMeter.parent(row3);
   huntMeter.attribute("min", "0");
   huntMeter.attribute("max", HUNT_THRESHOLD.toString());
   huntMeter.attribute("value", "0");
-  huntMeter.addClass("hunt");
-  huntMeter.style("width", "300px");
-  huntMeter.style("height", "30px");
   
   abyssMeter = createElement('meter');
+  abyssMeter.addClass("abyss meterRes");
   abyssMeter.parent(row3);
   abyssMeter.attribute("min", "0");
   abyssMeter.attribute("max", ABSYSS_THRESHOLD.toString());
   abyssMeter.attribute("value", "0");
-  abyssMeter.addClass("abyss");
-  abyssMeter.style("width", "300px");
-  abyssMeter.style("height", "30px");
   
   // Tier 4: Title
-  row4 = createDiv();
+  row4 = createDiv().addClass("row");
   row4.parent(controlPanel);
-  row4.style("display", "flex");
-  row4.style("justify-content", "center");
-  row4.style("align-items", "center");
-  row4.style("flex-wrap", "wrap");
   row4.style("margin-top", "10px");
   titleSpan = createSpan('<span style="color: rgb(255,215,0); font-size:24px;">The Ignis</span> & <span style="color: #9C89B8; font-size:24px;">The Abyss</span>');
   titleSpan.parent(row4);
@@ -244,6 +241,7 @@ function setup() {
   resetSimulation();
 }
 
+// -------------- Rest of the code (unchanged game logic) --------------
 let moveSpeed = 1.95;
 
 function resetSimulation() {
@@ -530,7 +528,9 @@ class Tendril {
     if (!simulationRunning) return;
     if (this.immolating) {
       this.immolateTimer += deltaTime;
-      if (this.immolateTimer > this.immolateDuration) { this.dead = true; }
+      if (this.immolateTimer > this.immolateDuration) {
+        this.dead = true;
+      }
     } else {
       let d = p5.Vector.dist(this.pos, singularity.pos);
       if (d > ORBIT_DISTANCE) {
@@ -550,7 +550,9 @@ class Tendril {
       this.acc.mult(0);
     }
     this.tail.push(this.pos.copy());
-    if (this.tail.length > this.tailMax) { this.tail.shift(); }
+    if (this.tail.length > this.tailMax) {
+      this.tail.shift();
+    }
   }
   show() {
     noStroke();
@@ -563,8 +565,8 @@ class Tendril {
         let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
         drawColor = lerpColor(cyanColor, blackColor, amt);
       }
-    } else { 
-      drawColor = color(130, 0, 130); 
+    } else {
+      drawColor = color(130, 0, 130);
     }
     fill(drawColor);
     ellipse(this.pos.x, this.pos.y, 7, 7);
@@ -586,10 +588,15 @@ function drawExplosion() {
   translate(singularity.pos.x, singularity.pos.y);
   let steps = 5;
   let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
-  if (explosionType === "nova") { stroke(0,255,255, alphaVal); }
-  else if (explosionType === "burst") { stroke(255,215,0, alphaVal); }
-  else if (explosionType === "death") { stroke(255,0,255, alphaVal); }
-  else { stroke(255,215,0, alphaVal); }
+  if (explosionType === "nova") {
+    stroke(0,255,255, alphaVal);
+  } else if (explosionType === "burst") {
+    stroke(255,215,0, alphaVal);
+  } else if (explosionType === "death") {
+    stroke(255,0,255, alphaVal);
+  } else {
+    stroke(255,215,0, alphaVal);
+  }
   noFill();
   for (let i = 0; i < 20; i++) {
     push();
@@ -598,7 +605,7 @@ function drawExplosion() {
     let len = random(20, 50);
     vertex(0, 0);
     for (let j = 0; j < steps; j++) {
-      let angle = random(-PI/4, PI/4);
+      let angle = random(-Math.PI/4, Math.PI/4);
       let x = cos(angle) * len;
       let y = sin(angle) * len;
       vertex(x, y);
