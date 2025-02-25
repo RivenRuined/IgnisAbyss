@@ -1,7 +1,16 @@
-/* Minimal Ignis.js
-   - No extra titles or instructions
-   - Single container in normal flow
-   - Full game logic intact
+console.log("Ignis.js loaded and running!");
+
+/* 
+  Ignis.js
+  Minimal layout:
+
+  Row1: [Spawn | Hunt | Burst | Nova]
+  Row2: [AggressionInput | GravityInput | SpeedInput]
+  Row3: [AggressionLabel | GravityLabel | SpeedLabel]
+  Row4: [NovaMeter | NovaCooldownMeter]
+  Row5: [HuntMeter | AbyssMeter]
+
+  Full game logic remains intact.
 */
 
 // ---------------- Global Constants & Variables ----------------
@@ -23,7 +32,6 @@ let lastNovaTime = 0;
 let explosionTimer = 0;
 const explosionDuration = 500;
 let explosionType = "none";
-
 let deathBurstCount = 0;
 let deathBurstInterval = 300;
 let deathBurstTimer = 0;
@@ -33,19 +41,29 @@ let tendrils = [];
 let singularity;
 let simulationRunning = true;
 
-// UI elements
-let container;
-let controlPanel;
-let row1, row2, row3;
-let spawnBtn, huntBtn, burstBtn, novaBtn;
-let aggressionInput, gravityInput, speedInput;
-let novaMeter, novaCooldownMeter, huntMeter, abyssMeter;
+// Movement speed for the Singularity
+let moveSpeed = 1.95;
 
-let moveSpeed = 1.95;  // Movement speed for the singularity
+// p5 DOM elements
+let container;
+let cnv;
+let controlPanel;
+
+// Rows
+let row1, row2, row3, row4, row5;
+
+// Buttons
+let spawnBtn, huntBtn, burstBtn, novaBtn;
+
+// Numeric inputs
+let aggressionInput, gravityInput, speedInput;
+
+// Meters
+let novaMeter, novaCooldownMeter, huntMeter, abyssMeter;
 
 // ---------------- Setup ----------------
 function setup() {
-  // Create a main container in normal flow
+  // Main container in normal document flow
   container = createDiv();
   container.style("display", "flex");
   container.style("flex-direction", "column");
@@ -54,18 +72,18 @@ function setup() {
   container.style("padding", "0");
   container.style("background-color", "#000");
   container.style("width", "100%");
-  container.style("max-width", "100%");  // let it fill the screen
+  container.style("max-width", "100%");
 
-  // Create the p5 canvas inside this container
-  let cnv = createCanvas(1200, 900);
+  // Create the canvas inside this container
+  cnv = createCanvas(1200, 900);
   cnv.parent(container);
 
-  // Basic colors
+  // Define colors
   purpleColor = color(130, 0, 130);
   cyanColor = color(0, 255, 255);
   blackColor = color(0, 0, 0);
 
-  // Optional: Some meter styling
+  // Optional meter styling
   createElement('style', `
     meter.nova::-webkit-meter-optimum-value { background: #008B8B; }
     meter.nova::-webkit-meter-suboptimum-value { background: #008B8B; }
@@ -84,7 +102,7 @@ function setup() {
     meter.novacooldown::-moz-meter-bar { background: #555555; }
   `).parent(document.head);
 
-  // Control Panel (HUD) below the canvas
+  // Control Panel
   controlPanel = createDiv();
   controlPanel.parent(container);
   controlPanel.style("background", "black");
@@ -93,16 +111,16 @@ function setup() {
   controlPanel.style("padding", "10px 0");
   controlPanel.style("width", "100%");
   controlPanel.style("max-width", "1200px");
+  controlPanel.style("font-family", "sans-serif");
 
-  // Row 1: Buttons (Spawn, Hunt, Burst, Nova)
+  // --- Row 1: Buttons (Spawn, Hunt, Burst, Nova) ---
   row1 = createDiv();
   row1.parent(controlPanel);
   row1.style("display", "flex");
   row1.style("justify-content", "center");
   row1.style("align-items", "center");
-  row1.style("flex-wrap", "wrap");
-  row1.style("margin-bottom", "10px");
   row1.style("gap", "10px");
+  row1.style("margin-bottom", "10px");
 
   spawnBtn = createButton("Spawn");
   spawnBtn.parent(row1);
@@ -128,23 +146,22 @@ function setup() {
   // Basic styling for buttons
   [spawnBtn, huntBtn, burstBtn, novaBtn].forEach(btn => {
     btn.style("font-size", "18px");
-    btn.style("margin", "5px");
     btn.style("background-color", "#202325");
     btn.style("color", "#9C89B8");
+    btn.style("padding", "5px 10px");
   });
-  // Different color for Burst & Nova
+  // Special color for Burst & Nova
   burstBtn.style("color", "#00FFFF");
   novaBtn.style("color", "#00FFFF");
 
-  // Row 2: Numeric Inputs (Aggression, Gravity, Speed)
+  // --- Row 2: numeric inputs (Aggression, Gravity, Speed) ---
   row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
   row2.style("justify-content", "center");
   row2.style("align-items", "center");
-  row2.style("flex-wrap", "wrap");
-  row2.style("margin-bottom", "10px");
   row2.style("gap", "20px");
+  row2.style("margin-bottom", "5px");
 
   aggressionInput = createInput('1.7', 'number');
   aggressionInput.parent(row2);
@@ -164,69 +181,88 @@ function setup() {
   speedInput.style("width", "60px");
   speedInput.style("text-align", "center");
 
-  // Add small labels below each input if desired:
-  // (Remove if you want them unlabeled)
-  let labels = ["Aggression", "Gravity", "Speed"];
-  [aggressionInput, gravityInput, speedInput].forEach((inp, i) => {
-    let label = createDiv(labels[i]);
-    label.style("font-size", "14px");
-    label.style("color", "#CCCCCC");
-    label.parent(row2);
-    label.style("margin-right", "20px");
-    label.style("margin-left", "-15px"); 
-    // Adjust spacing as needed
-  });
-
-  // Row 3: Meters (Nova, Nova Cooldown, Hunt, Abyss)
+  // --- Row 3: labels for the inputs (Aggression | Gravity | Speed) ---
   row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
   row3.style("justify-content", "center");
   row3.style("align-items", "center");
-  row3.style("flex-wrap", "wrap");
-  row3.style("gap", "20px");
+  row3.style("gap", "60px");
+  row3.style("margin-bottom", "10px");
+
+  let aggLabel = createSpan("Aggression");
+  aggLabel.parent(row3);
+  aggLabel.style("font-size", "14px");
+  aggLabel.style("color", "#CCCCCC");
+
+  let gravLabel = createSpan("Gravity");
+  gravLabel.parent(row3);
+  gravLabel.style("font-size", "14px");
+  gravLabel.style("color", "#CCCCCC");
+
+  let spdLabel = createSpan("Speed");
+  spdLabel.parent(row3);
+  spdLabel.style("font-size", "14px");
+  spdLabel.style("color", "#CCCCCC");
+
+  // --- Row 4: top meters (Nova, Nova Cooldown) ---
+  row4 = createDiv();
+  row4.parent(controlPanel);
+  row4.style("display", "flex");
+  row4.style("justify-content", "center");
+  row4.style("align-items", "center");
+  row4.style("gap", "20px");
+  row4.style("margin-bottom", "5px");
 
   novaMeter = createElement('meter');
-  novaMeter.parent(row3);
+  novaMeter.parent(row4);
   novaMeter.attribute("min", "0");
   novaMeter.attribute("max", NOVA_THRESHOLD.toString());
   novaMeter.attribute("value", "0");
   novaMeter.addClass("nova");
-  novaMeter.style("width", "250px");
+  novaMeter.style("width", "200px");
   novaMeter.style("height", "20px");
 
   novaCooldownMeter = createElement('meter');
-  novaCooldownMeter.parent(row3);
+  novaCooldownMeter.parent(row4);
   novaCooldownMeter.attribute("min", "0");
   novaCooldownMeter.attribute("max", NOVA_COOLDOWN_TIME.toString());
   novaCooldownMeter.attribute("value", "0");
   novaCooldownMeter.addClass("novacooldown");
-  novaCooldownMeter.style("width", "250px");
+  novaCooldownMeter.style("width", "200px");
   novaCooldownMeter.style("height", "20px");
 
+  // --- Row 5: bottom meters (Hunt, Abyss) ---
+  row5 = createDiv();
+  row5.parent(controlPanel);
+  row5.style("display", "flex");
+  row5.style("justify-content", "center");
+  row5.style("align-items", "center");
+  row5.style("gap", "20px");
+
   huntMeter = createElement('meter');
-  huntMeter.parent(row3);
+  huntMeter.parent(row5);
   huntMeter.attribute("min", "0");
   huntMeter.attribute("max", HUNT_THRESHOLD.toString());
   huntMeter.attribute("value", "0");
   huntMeter.addClass("hunt");
-  huntMeter.style("width", "250px");
+  huntMeter.style("width", "200px");
   huntMeter.style("height", "20px");
 
   abyssMeter = createElement('meter');
-  abyssMeter.parent(row3);
+  abyssMeter.parent(row5);
   abyssMeter.attribute("min", "0");
   abyssMeter.attribute("max", ABSYSS_THRESHOLD.toString());
   abyssMeter.attribute("value", "0");
   abyssMeter.addClass("abyss");
-  abyssMeter.style("width", "250px");
+  abyssMeter.style("width", "200px");
   abyssMeter.style("height", "20px");
 
-  // Start the simulation
+  // Initialize
   resetSimulation();
 }
 
-// ---------------- Simulation Reset ----------------
+// ---------------- Reset Simulation ----------------
 function resetSimulation() {
   simulationRunning = true;
   explosionTimer = 0;
@@ -258,7 +294,7 @@ function spawnTendrils(n = 1) {
   }
 }
 
-// ---------------- Keyboard Control ----------------
+// ---------------- Keyboard ----------------
 function handleKeyboard() {
   moveSpeed = parseFloat(speedInput.value());
   if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) { singularity.pos.x -= moveSpeed; }
@@ -270,7 +306,7 @@ function handleKeyboard() {
 }
 
 function keyReleased() {
-  // Space -> Burst
+  // SPACE -> Burst
   if (keyCode === 32) { triggerRepel(); }
   // V -> Nova
   if (keyCode === 86 && novaCooldown <= 0) {
@@ -279,7 +315,7 @@ function keyReleased() {
   }
 }
 
-// ---------------- Buttons ----------------
+// ---------------- Button Triggers ----------------
 function triggerHunt() {
   for (let t of tendrils) {
     t.hunt(singularity.pos);
@@ -326,7 +362,7 @@ function triggerNovaBurst() {
   lastNovaTime = millis();
 }
 
-// ---------------- Draw ----------------
+// ---------------- Draw Loop ----------------
 function draw() {
   background(0);
   handleKeyboard();
@@ -334,6 +370,7 @@ function draw() {
   let simSpeed = parseFloat(aggressionInput.value());
   let gravPull = parseFloat(gravityInput.value());
 
+  // Tendril spawning
   spawnTimer += deltaTime;
   if (spawnTimer > SPAWN_INTERVAL) {
     spawnTendrils(10);
@@ -361,11 +398,11 @@ function draw() {
   }
   novaCooldownMeter.attribute("value", novaCooldown.toString());
 
-  // Update & show singularity
+  // Update & draw singularity
   singularity.update();
   singularity.show();
 
-  // Update & show tendrils
+  // Update & draw tendrils
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
     if (d < ORBIT_DISTANCE) {
@@ -375,7 +412,7 @@ function draw() {
     t.show();
   }
 
-  // Count how many are in orbit
+  // Count how many in orbit
   let countOrbit = 0;
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
@@ -421,7 +458,7 @@ function draw() {
   }
 }
 
-// ---------------- Classes ----------------
+// ---------------- Singularity Class ----------------
 class Singularity {
   constructor(x, y) {
     this.pos = createVector(x, y);
@@ -485,8 +522,10 @@ class Singularity {
   }
 }
 
+// ---------------- Tendril Class ----------------
 class Tendril {
   constructor() {
+    // Spawn along a random edge
     let edge = floor(random(4));
     if (edge === 0) { this.pos = createVector(random(width), 0); }
     else if (edge === 1) { this.pos = createVector(width, random(height)); }
@@ -570,6 +609,7 @@ class Tendril {
     noStroke();
     let drawColor;
     if (this.immolating) {
+      // fade from purple->cyan->black
       if (this.immolateTimer < this.immolateDuration / 2) {
         let amt = this.immolateTimer / (this.immolateDuration / 2);
         drawColor = lerpColor(purpleColor, cyanColor, amt);
@@ -580,6 +620,7 @@ class Tendril {
     } else {
       drawColor = color(130, 0, 130);
     }
+
     fill(drawColor);
     ellipse(this.pos.x, this.pos.y, 7, 7);
 
@@ -631,3 +672,5 @@ function drawExplosion() {
   }
   pop();
 }
+
+// No extra text or instructions—just the layout and logic.
