@@ -2,15 +2,17 @@ console.log("Ignis.js loaded and running!");
 
 /* 
   Ignis.js
-  Minimal layout:
+  HUD Layout:
+  
+  Row 1: [Spawn | Hunt | Burst | Nova]
+  Row 2: [AggressionInput | GravityInput | SpeedInput]
+  Row 3: [Aggression | Gravity | Speed]
+  Row 4: [NovaMeter | NovaCooldownMeter]
+  Row 5: [HuntMeter | AbyssMeter]
 
-  Row1: [Spawn | Hunt | Burst | Nova]
-  Row2: [AggressionInput | GravityInput | SpeedInput]
-  Row3: [AggressionLabel | GravityLabel | SpeedLabel]
-  Row4: [NovaMeter | NovaCooldownMeter]
-  Row5: [HuntMeter | AbyssMeter]
-
-  Full game logic remains intact.
+  Touch Controls:
+  - If a touch begins in the left d‑pad area (within 30% of canvas width and inside a defined circle), dragging acts as a virtual joystick.
+  - Otherwise, a swipe/drag anywhere moves the singularity.
 */
 
 // ---------------- Global Constants & Variables ----------------
@@ -60,6 +62,14 @@ let aggressionInput, gravityInput, speedInput;
 
 // Meters
 let novaMeter, novaCooldownMeter, huntMeter, abyssMeter;
+
+// ---------------- Touch Control Variables ----------------
+let dPadActive = false;
+let touchStartX = 0;
+let touchStartY = 0;
+let dPadCenterX = 80;  // Adjust as needed
+let dPadCenterY = 820; // Adjust as needed
+let dPadRadius = 50;
 
 // ---------------- Setup ----------------
 function setup() {
@@ -143,18 +153,16 @@ function setup() {
     }
   });
 
-  // Basic styling for buttons
   [spawnBtn, huntBtn, burstBtn, novaBtn].forEach(btn => {
     btn.style("font-size", "18px");
     btn.style("background-color", "#202325");
     btn.style("color", "#9C89B8");
     btn.style("padding", "5px 10px");
   });
-  // Special color for Burst & Nova
   burstBtn.style("color", "#00FFFF");
   novaBtn.style("color", "#00FFFF");
 
-  // --- Row 2: numeric inputs (Aggression, Gravity, Speed) ---
+  // --- Row 2: Numeric Inputs (Aggression, Gravity, Speed) ---
   row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
@@ -181,7 +189,7 @@ function setup() {
   speedInput.style("width", "60px");
   speedInput.style("text-align", "center");
 
-  // --- Row 3: labels for the inputs (Aggression | Gravity | Speed) ---
+  // --- Row 3: Labels for Inputs (Aggression, Gravity, Speed) ---
   row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
@@ -205,7 +213,7 @@ function setup() {
   spdLabel.style("font-size", "14px");
   spdLabel.style("color", "#CCCCCC");
 
-  // --- Row 4: top meters (Nova, Nova Cooldown) ---
+  // --- Row 4: Top Meters (Nova, Nova Cooldown) ---
   row4 = createDiv();
   row4.parent(controlPanel);
   row4.style("display", "flex");
@@ -232,7 +240,7 @@ function setup() {
   novaCooldownMeter.style("width", "200px");
   novaCooldownMeter.style("height", "20px");
 
-  // --- Row 5: bottom meters (Hunt, Abyss) ---
+  // --- Row 5: Bottom Meters (Hunt, Abyss) ---
   row5 = createDiv();
   row5.parent(controlPanel);
   row5.style("display", "flex");
@@ -258,7 +266,7 @@ function setup() {
   abyssMeter.style("width", "200px");
   abyssMeter.style("height", "20px");
 
-  // Initialize
+  // Initialize simulation
   resetSimulation();
 }
 
@@ -294,7 +302,7 @@ function spawnTendrils(n = 1) {
   }
 }
 
-// ---------------- Keyboard ----------------
+// ---------------- Keyboard Control ----------------
 function handleKeyboard() {
   moveSpeed = parseFloat(speedInput.value());
   if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) { singularity.pos.x -= moveSpeed; }
@@ -306,9 +314,7 @@ function handleKeyboard() {
 }
 
 function keyReleased() {
-  // SPACE -> Burst
   if (keyCode === 32) { triggerRepel(); }
-  // V -> Nova
   if (keyCode === 86 && novaCooldown <= 0) {
     triggerNovaManual();
     novaCooldown = NOVA_COOLDOWN_TIME;
@@ -370,14 +376,12 @@ function draw() {
   let simSpeed = parseFloat(aggressionInput.value());
   let gravPull = parseFloat(gravityInput.value());
 
-  // Tendril spawning
   spawnTimer += deltaTime;
   if (spawnTimer > SPAWN_INTERVAL) {
     spawnTendrils(10);
     spawnTimer = 0;
   }
 
-  // Timers
   huntTimer += deltaTime;
   if (huntTimer >= HUNT_THRESHOLD) {
     triggerHunt();
@@ -398,34 +402,27 @@ function draw() {
   }
   novaCooldownMeter.attribute("value", novaCooldown.toString());
 
-  // Update & draw singularity
   singularity.update();
   singularity.show();
 
-  // Update & draw tendrils
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE) {
-      t.orbit(singularity.pos, gravPull);
-    }
+    if (d < ORBIT_DISTANCE) { t.orbit(singularity.pos, gravPull); }
     t.update();
     t.show();
   }
 
-  // Count how many in orbit
   let countOrbit = 0;
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
     if (d < ORBIT_DISTANCE) { countOrbit++; }
   }
 
-  // Abyss assimilation
   if (countOrbit >= 3 && singularity.state === "healthy") {
     abyssAccumulator += deltaTime;
   } else {
     abyssAccumulator = 0;
   }
-
   if (abyssAccumulator >= ABSYSS_THRESHOLD && singularity.state === "healthy") {
     singularity.state = "assimilating";
     singularity.assimilationTimer = 0;
@@ -437,7 +434,6 @@ function draw() {
   }
   abyssMeter.attribute("value", abyssAccumulator.toString());
 
-  // Death burst chain
   if ((singularity.state === "assimilating" || singularity.state === "dead") && deathBurstCount > 0) {
     deathBurstTimer += deltaTime;
     if (deathBurstTimer >= deathBurstInterval) {
@@ -448,14 +444,54 @@ function draw() {
     }
   }
 
-  // Remove dead tendrils
   tendrils = tendrils.filter(t => !t.dead);
 
-  // Explosion effect
   if (explosionTimer > 0) {
     drawExplosion();
     explosionTimer -= deltaTime;
   }
+}
+
+// ---------------- Touch Controls ----------------
+function touchStarted() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    // If touch begins in left 30% of canvas, check for d-pad activation
+    if (t.x < width * 0.3) {
+      if (dist(t.x, t.y, dPadCenterX, dPadCenterY) < dPadRadius) {
+        dPadActive = true;
+      }
+    } else {
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchMoved() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    if (dPadActive) {
+      let dx = t.x - dPadCenterX;
+      let dy = t.y - dPadCenterY;
+      singularity.pos.x += dx * 0.05;
+      singularity.pos.y += dy * 0.05;
+    } else {
+      let dx = t.x - touchStartX;
+      let dy = t.y - touchStartY;
+      singularity.pos.x += dx * 0.05;
+      singularity.pos.y += dy * 0.05;
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchEnded() {
+  dPadActive = false;
+  return false;
 }
 
 // ---------------- Singularity Class ----------------
@@ -473,7 +509,6 @@ class Singularity {
 
   update() {
     if (this.state === "healthy") {
-      // Pulsate color from gold to orange
       this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
       let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
       let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
@@ -525,7 +560,6 @@ class Singularity {
 // ---------------- Tendril Class ----------------
 class Tendril {
   constructor() {
-    // Spawn along a random edge
     let edge = floor(random(4));
     if (edge === 0) { this.pos = createVector(random(width), 0); }
     else if (edge === 1) { this.pos = createVector(width, random(height)); }
@@ -551,7 +585,7 @@ class Tendril {
   }
 
   hunt(targetPos) {
-    this.boostTimer = 30; // short hunt boost
+    this.boostTimer = 30;
   }
 
   orbit(targetPos, pullStrength) {
@@ -598,7 +632,6 @@ class Tendril {
       this.acc.mult(0);
     }
 
-    // Tail
     this.tail.push(this.pos.copy());
     if (this.tail.length > this.tailMax) {
       this.tail.shift();
@@ -609,7 +642,6 @@ class Tendril {
     noStroke();
     let drawColor;
     if (this.immolating) {
-      // fade from purple->cyan->black
       if (this.immolateTimer < this.immolateDuration / 2) {
         let amt = this.immolateTimer / (this.immolateDuration / 2);
         drawColor = lerpColor(purpleColor, cyanColor, amt);
@@ -620,7 +652,6 @@ class Tendril {
     } else {
       drawColor = color(130, 0, 130);
     }
-
     fill(drawColor);
     ellipse(this.pos.x, this.pos.y, 7, 7);
 
@@ -637,7 +668,7 @@ class Tendril {
   }
 }
 
-// ---------------- Explosion ----------------
+// ---------------- Explosion Effect ----------------
 function drawExplosion() {
   push();
   translate(singularity.pos.x, singularity.pos.y);
@@ -673,4 +704,45 @@ function drawExplosion() {
   pop();
 }
 
-// No extra text or instructions—just the layout and logic.
+// End of main code. ----------------
+// ---------------- Touch Controls ----------------
+function touchStarted() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    // If touch begins in left 30% of canvas, check for d-pad activation
+    if (t.x < width * 0.3) {
+      if (dist(t.x, t.y, dPadCenterX, dPadCenterY) < dPadRadius) {
+        dPadActive = true;
+      }
+    } else {
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchMoved() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    if (dPadActive) {
+      let dx = t.x - dPadCenterX;
+      let dy = t.y - dPadCenterY;
+      singularity.pos.x += dx * 0.05;
+      singularity.pos.y += dy * 0.05;
+    } else {
+      let dx = t.x - touchStartX;
+      let dy = t.y - touchStartY;
+      singularity.pos.x += dx * 0.05;
+      singularity.pos.y += dy * 0.05;
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchEnded() {
+  dPadActive = false;
+  return false;
+}
