@@ -1,3 +1,4 @@
+console.log("Ignis.js loaded and running!");
 /* 
   Cosmic Hunt – Life vs. Death (Final Version with Hunt Meter, Keyboard Control, 
   Multi-Activation Death Burst, Updated Defaults, Nova Cooldown, and Pulsating Ignis)
