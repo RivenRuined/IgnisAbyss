@@ -1,85 +1,39 @@
 console.log("Ignis.js loaded and running!");
+
 /* 
   Cosmic Hunt – Life vs. Death (Final Version with Hunt Meter, Keyboard Control, 
   Multi-Activation Death Burst, Updated Defaults, Nova Cooldown, and Pulsating Ignis)
-
-  Tendrils spawn at the canvas edges and pursue a pulsing golden singularity.
-  
-  When tendrils orbit the singularity (within 50px), a global Nova meter fills over 3.5 seconds.
-  When full, an automatic Nova burst is unleashed that immolates (kills) up to 5 tendrils in orbit.
-  (The Nova button—and the V key when released—trigger Nova, but only if the cooldown has expired.)
-  
-  Meanwhile, if 3 or more tendrils remain in orbit (within 50px) of the singularity,
-  an Abyss (Assimilation) meter fills over 13 seconds. If that meter fills, the singularity is assimilated:
-  its health degrades from its healthy state (now pulsating between gold and sunset orange) to Magenta,
-  and then it dies. When fewer than 3 tendrils remain in orbit, the Abyss meter resets immediately.
-  
-  The Burst button forcefully repels tendrils in orbit by immediately overriding their velocity
-  with a strong outward vector (20% increased force). (Press SPACE to trigger Burst.)
-  
-  Additionally, a Hunt Meter (filling over 5 seconds) is added. When it fills, the Hunt action is automatically triggered,
-  drawing tendrils inward.
-  
-  When assimilation is triggered (the Abyss meter fills), a "Death Burst" visual effect is activated.
-  In this state, the singularity is drawn as a black circle with a MAGENTA outline and remains dead for 7 seconds before respawning.
-  Also, upon assimilation, the Death Burst effect fires 5 times in a row (with a 300 ms interval) for a "death flare."
-  
-  The singularity (“The Ignis”) is user-controlled via arrow keys or WASD; its movement speed is adjustable via the "Movement" input.
-  
-  Additionally, because Nova is very strong, manual Nova can only be triggered once every 10 seconds.
-  A Nova Cooldown Meter is displayed next to the Nova Meter.
-  
-  Control panel layout:
-  
-    Spawn | Hunt | Aggression | Gravity | Movement | Burst | Nova  
-             Nova Threshold Meter  | Nova Cooldown Meter  
-             [ Hunt Meter | Assimilation Meter ]  
-             The Ignis & The Abyss
-  
-  Defaults: Aggression = 1.7, Gravity = 1.5, Movement = 1.95.
-  Tendrils spawn every 5 seconds (10 at a time) up to a hard cap of 50.
-  Canvas size is 1200×900.
+  ...
 */
 
 // ---------------- Global Constants and Variables ----------------
+const TENDRIL_COUNT = 20;
+const ORBIT_DISTANCE = 50;
+const NOVA_THRESHOLD = 3500;
+const ABSYSS_THRESHOLD = 13000;
+const HUNT_THRESHOLD = 5000;
+const NOVA_COOLDOWN_TIME = 10000;
 
-const TENDRIL_COUNT = 20;        // Initially spawned
-const ORBIT_DISTANCE = 50;       // Orbit zone (px)
-const NOVA_THRESHOLD = 3500;     // 3.5 seconds for Nova burst events
-const ABSYSS_THRESHOLD = 13000;  // 13 seconds for assimilation
-const HUNT_THRESHOLD = 5000;     // 5 seconds for Hunt boost
-const NOVA_COOLDOWN_TIME = 10000; // 10 seconds cooldown for manual Nova
+let novaTimer = 0;
+let huntTimer = 0;
+let abyssAccumulator = 0;
+let novaCooldown = 0;
 
-let novaTimer = 0;               // Global Nova timer
-let huntTimer = 0;               // Global Hunt timer
-let abyssAccumulator = 0;        // Abyss accumulator for assimilation
-let novaCooldown = 0;            // Cooldown timer for manual Nova
-
-let spawnTimer = 0;              // Timer for periodic spawning
-const SPAWN_INTERVAL = 5000;     // Every 5 seconds, spawn 10 tendrils
-
-let lastNovaTime = 0;            // For throttling Nova bursts
-
-let explosionTimer = 0;          // Timer for explosion visuals
-const explosionDuration = 500;   // in ms
-
-// Explosion type: "nova", "burst", or "death"
+let spawnTimer = 0;
+const SPAWN_INTERVAL = 5000;
+let lastNovaTime = 0;
+let explosionTimer = 0;
+const explosionDuration = 500;
 let explosionType = "none";
-
-// Death Burst variables (for multi-activation)
 let deathBurstCount = 0;
-let deathBurstInterval = 300;    // ms between death bursts
+let deathBurstInterval = 300;
 let deathBurstTimer = 0;
 
-// Colors
 let purpleColor, cyanColor, blackColor;
-
-// Arrays and simulation flag
 let tendrils = [];
 let singularity;
 let simulationRunning = true;
 
-// ---------------- Control Panel Elements ----------------
 let controlPanel, row1, row2, row3, row4;
 let spawnBtn, huntBtn, burstBtn, novaBtn;
 let aggressionInput, gravityInput, moveSpeedInput;
@@ -87,18 +41,15 @@ let novaMeter, novaCooldownMeter, abyssMeter, huntMeter;
 let titleSpan;
 
 // ---------------- Setup ----------------
-
 function setup() {
   createCanvas(1200, 900);
   angleMode(RADIANS);
   document.body.style.backgroundColor = "#000000";
   
-  // Define colors
   purpleColor = color(130, 0, 130);
   cyanColor = color(0, 255, 255);
   blackColor = color(0, 0, 0);
   
-  // --- Add custom CSS for meter styling ---
   let novaMeterCSS = createElement('style', `
     meter.nova::-webkit-meter-optimum-value { background: #008B8B; }
     meter.nova::-webkit-meter-suboptimum-value { background: #008B8B; }
@@ -127,7 +78,6 @@ function setup() {
   `);
   novaCooldownCSS.parent(document.head);
   
-  // --- Create the Control Panel ---
   controlPanel = createDiv();
   controlPanel.position(0, height);
   controlPanel.style("width", "1200px");
@@ -136,7 +86,6 @@ function setup() {
   controlPanel.style("text-align", "center");
   controlPanel.style("padding", "10px 0");
   
-  // Row 1: Buttons and Numeric Inputs
   row1 = createDiv();
   row1.parent(controlPanel);
   row1.style("display", "block");
@@ -212,9 +161,13 @@ function setup() {
   novaBtn.style("margin", "0 10px");
   novaBtn.style("background-color", "#202325");
   novaBtn.style("color", "#00FFFF");
-  novaBtn.mousePressed(() => { if(novaCooldown <= 0) { triggerNovaManual(); novaCooldown = NOVA_COOLDOWN_TIME; } });
+  novaBtn.mousePressed(() => { 
+    if(novaCooldown <= 0) { 
+      triggerNovaManual(); 
+      novaCooldown = NOVA_COOLDOWN_TIME; 
+    } 
+  });
   
-  // Row 2: Nova Meter and Nova Cooldown Meter side-by-side
   row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
@@ -240,7 +193,6 @@ function setup() {
   novaCooldownMeter.style("width", "300px");
   novaCooldownMeter.style("height", "30px");
   
-  // Row 3: Hunt Meter and Assimilation (Abyss) Meter side-by-side
   row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
@@ -266,7 +218,6 @@ function setup() {
   abyssMeter.style("width", "300px");
   abyssMeter.style("height", "30px");
   
-  // Row 4: Title
   row4 = createDiv();
   row4.parent(controlPanel);
   row4.style("display", "block");
@@ -275,14 +226,10 @@ function setup() {
   titleSpan = createSpan('<span style="color: rgb(255,215,0); font-size:24px;">The Ignis</span> & <span style="color: #9C89B8; font-size:24px;">The Abyss</span>');
   titleSpan.parent(row4);
   
-  // Reset simulation.
   resetSimulation();
 }
 
-// ---------------- Global Movement Speed Variable ----------------
 let moveSpeed = 1.95;
-
-// ---------------- Simulation Reset and Spawning ----------------
 
 function resetSimulation() {
   simulationRunning = true;
@@ -314,8 +261,6 @@ function spawnTendrils(n = 1) {
   }
 }
 
-// ---------------- Keyboard Control for the Singularity ----------------
-
 function handleKeyboard() {
   moveSpeed = parseFloat(moveSpeedInput.value());
   if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) { singularity.pos.x -= moveSpeed; }
@@ -326,13 +271,13 @@ function handleKeyboard() {
   singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
 }
 
-// Allow SPACE to trigger Burst and V to trigger Nova manually.
 function keyReleased() {
   if (keyCode === 32) { triggerRepel(); }
-  if (keyCode === 86 && novaCooldown <= 0) { triggerNovaManual(); novaCooldown = NOVA_COOLDOWN_TIME; }
+  if (keyCode === 86 && novaCooldown <= 0) { 
+    triggerNovaManual(); 
+    novaCooldown = NOVA_COOLDOWN_TIME; 
+  }
 }
-
-// ---------------- Control Functions ----------------
 
 function triggerHunt() {
   for (let t of tendrils) { t.hunt(singularity.pos); }
@@ -376,19 +321,14 @@ function triggerNovaBurst() {
   lastNovaTime = millis();
 }
 
-// ---------------- Death Burst Multi-Activation ----------------
-
 if (typeof deathBurstCount === 'undefined') {
   deathBurstCount = 0;
   deathBurstInterval = 300;
   deathBurstTimer = 0;
 }
 
-// ---------------- Draw Loop ----------------
-
 function draw() {
   background(0);
-  
   handleKeyboard();
   
   simSpeed = parseFloat(aggressionInput.value());
@@ -472,8 +412,6 @@ function draw() {
   }
 }
 
-// ---------------- Classes ----------------
-
 class Singularity {
   constructor(x, y) {
     this.pos = createVector(x, y);
@@ -483,13 +421,11 @@ class Singularity {
     this.state = "healthy";
     this.assimilationTimer = 0;
     this.respawnTimer = 0;
-    // Use a pulsating gradient from gold to sunset orange for the healthy state.
     this.currentColor = color(255,215,0);
   }
   update() {
     if (this.state === "healthy") {
       this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
-      // Create a pulsating base color between Gold and Sunset Orange.
       let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
       let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
       let p = abyssAccumulator / ABSYSS_THRESHOLD;
@@ -612,7 +548,9 @@ class Tendril {
         let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
         drawColor = lerpColor(cyanColor, blackColor, amt);
       }
-    } else { drawColor = color(130, 0, 130); }
+    } else { 
+      drawColor = color(130, 0, 130); 
+    }
     fill(drawColor);
     ellipse(this.pos.x, this.pos.y, 7, 7);
     strokeWeight(1);
@@ -655,3 +593,12 @@ function drawExplosion() {
   }
   pop();
 }
+
+function startgame() {
+  console.log("Game started!");
+  resetSimulation();
+}
+
+window.onload = function() {
+  setup();
+};
