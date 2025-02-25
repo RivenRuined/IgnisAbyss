@@ -46,10 +46,12 @@ function setup() {
   angleMode(RADIANS);
   document.body.style.backgroundColor = "#000000";
   
+  // Define colors
   purpleColor = color(130, 0, 130);
   cyanColor = color(0, 255, 255);
   blackColor = color(0, 0, 0);
   
+  // --- Custom CSS for meters ---
   let novaMeterCSS = createElement('style', `
     meter.nova::-webkit-meter-optimum-value { background: #008B8B; }
     meter.nova::-webkit-meter-suboptimum-value { background: #008B8B; }
@@ -78,24 +80,32 @@ function setup() {
   `);
   novaCooldownCSS.parent(document.head);
   
+  // --- Updated Control Panel Layout ---
   controlPanel = createDiv();
-  controlPanel.position(0, height);
-  controlPanel.style("width", "1200px");
+  controlPanel.style("position", "absolute");
+  controlPanel.style("bottom", "20px");
+  controlPanel.style("left", "50%");
+  controlPanel.style("transform", "translateX(-50%)");
+  controlPanel.style("width", "80%");
+  controlPanel.style("max-width", "1200px");
   controlPanel.style("background", "black");
   controlPanel.style("color", "grey");
   controlPanel.style("text-align", "center");
   controlPanel.style("padding", "10px 0");
   
+  // Row 1: Buttons & Numeric Inputs
   row1 = createDiv();
   row1.parent(controlPanel);
-  row1.style("display", "block");
-  row1.style("text-align", "center");
+  row1.style("display", "flex");
+  row1.style("justify-content", "center");
+  row1.style("align-items", "center");
+  row1.style("flex-wrap", "wrap");
   row1.style("margin-bottom", "10px");
   
   spawnBtn = createButton("Spawn");
   spawnBtn.parent(row1);
   spawnBtn.style("font-size", "24px");
-  spawnBtn.style("margin", "0 10px");
+  spawnBtn.style("margin", "5px");
   spawnBtn.style("background-color", "#202325");
   spawnBtn.style("color", "#9C89B8");
   spawnBtn.mousePressed(() => spawnTendrils(5));
@@ -103,7 +113,7 @@ function setup() {
   huntBtn = createButton("Hunt");
   huntBtn.parent(row1);
   huntBtn.style("font-size", "24px");
-  huntBtn.style("margin", "0 10px");
+  huntBtn.style("margin", "5px");
   huntBtn.style("background-color", "#202325");
   huntBtn.style("color", "#9C89B8");
   huntBtn.mousePressed(triggerHunt);
@@ -112,45 +122,45 @@ function setup() {
   aggressionLabel.parent(row1);
   aggressionLabel.style("display", "inline-block");
   aggressionLabel.style("font-size", "24px");
-  aggressionLabel.style("margin", "0 10px");
+  aggressionLabel.style("margin", "5px");
   
   aggressionInput = createInput('1.7', 'number');
   aggressionInput.parent(row1);
   aggressionInput.style("font-size", "24px");
   aggressionInput.style("width", "80px");
-  aggressionInput.style("margin", "0 10px");
+  aggressionInput.style("margin", "5px");
   aggressionInput.attribute("step", "0.1");
   
   let gravityLabel = createDiv("Gravity");
   gravityLabel.parent(row1);
   gravityLabel.style("display", "inline-block");
   gravityLabel.style("font-size", "24px");
-  gravityLabel.style("margin", "0 10px");
+  gravityLabel.style("margin", "5px");
   
   gravityInput = createInput('1.5', 'number');
   gravityInput.parent(row1);
   gravityInput.style("font-size", "24px");
   gravityInput.style("width", "80px");
-  gravityInput.style("margin", "0 10px");
+  gravityInput.style("margin", "5px");
   gravityInput.attribute("step", "0.1");
   
   let moveLabel = createDiv("Movement");
   moveLabel.parent(row1);
   moveLabel.style("display", "inline-block");
   moveLabel.style("font-size", "24px");
-  moveLabel.style("margin", "0 10px");
+  moveLabel.style("margin", "5px");
   
   moveSpeedInput = createInput('1.95', 'number');
   moveSpeedInput.parent(row1);
   moveSpeedInput.style("font-size", "24px");
   moveSpeedInput.style("width", "80px");
-  moveSpeedInput.style("margin", "0 10px");
+  moveSpeedInput.style("margin", "5px");
   moveSpeedInput.attribute("step", "0.1");
   
   burstBtn = createButton("Burst");
   burstBtn.parent(row1);
   burstBtn.style("font-size", "24px");
-  burstBtn.style("margin", "0 10px");
+  burstBtn.style("margin", "5px");
   burstBtn.style("background-color", "#202325");
   burstBtn.style("color", "#00FFFF");
   burstBtn.mousePressed(triggerRepel);
@@ -158,7 +168,7 @@ function setup() {
   novaBtn = createButton("Nova");
   novaBtn.parent(row1);
   novaBtn.style("font-size", "24px");
-  novaBtn.style("margin", "0 10px");
+  novaBtn.style("margin", "5px");
   novaBtn.style("background-color", "#202325");
   novaBtn.style("color", "#00FFFF");
   novaBtn.mousePressed(() => { 
@@ -168,11 +178,13 @@ function setup() {
     } 
   });
   
+  // Row 2: Nova Meter & Nova Cooldown Meter
   row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
   row2.style("justify-content", "center");
   row2.style("align-items", "center");
+  row2.style("flex-wrap", "wrap");
   row2.style("gap", "20px");
   
   novaMeter = createElement('meter');
@@ -193,11 +205,13 @@ function setup() {
   novaCooldownMeter.style("width", "300px");
   novaCooldownMeter.style("height", "30px");
   
+  // Row 3: Hunt Meter & Abyss Meter
   row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
   row3.style("justify-content", "center");
   row3.style("align-items", "center");
+  row3.style("flex-wrap", "wrap");
   row3.style("gap", "20px");
   
   huntMeter = createElement('meter');
@@ -218,14 +232,18 @@ function setup() {
   abyssMeter.style("width", "300px");
   abyssMeter.style("height", "30px");
   
+  // Row 4: Title
   row4 = createDiv();
   row4.parent(controlPanel);
-  row4.style("display", "block");
-  row4.style("text-align", "center");
+  row4.style("display", "flex");
+  row4.style("justify-content", "center");
+  row4.style("align-items", "center");
+  row4.style("flex-wrap", "wrap");
   row4.style("margin-top", "10px");
   titleSpan = createSpan('<span style="color: rgb(255,215,0); font-size:24px;">The Ignis</span> & <span style="color: #9C89B8; font-size:24px;">The Abyss</span>');
   titleSpan.parent(row4);
   
+  // Reset simulation.
   resetSimulation();
 }
 
