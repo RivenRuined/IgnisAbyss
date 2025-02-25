@@ -5,14 +5,15 @@ console.log("Ignis.js loaded and running!");
   HUD Layout:
   
   Row 1: [Spawn | Hunt | Burst | Nova]
-  Row 2: [AggressionInput | GravityInput | SpeedInput]
-  Row 3: [Aggression | Gravity | Speed]
-  Row 4: [NovaMeter | NovaCooldownMeter]
-  Row 5: [HuntMeter | AbyssMeter]
+  Row 2: [Agro Input | Gravity Input | Speed Input]
+  Row 3: [Agro | Gravity | Speed]    <-- Note: "Agro" formerly "Aggression"
+  Row 4: [Nova Meter | Nova Cooldown Meter]
+  Row 5: [Hunt Meter | Abyss Meter]
 
   Touch Controls:
-  - If a touch begins in the left d‑pad area (within 30% of canvas width and inside a defined circle), dragging acts as a virtual joystick.
-  - Otherwise, a swipe/drag anywhere moves the singularity.
+    - Swiping anywhere moves the player (with increased responsiveness).
+  D-Pad Controls (for mobile):
+    - A set of on‑screen buttons (Up, Down, Left, Right) on the left side that move the player.
 */
 
 // ---------------- Global Constants & Variables ----------------
@@ -51,25 +52,30 @@ let container;
 let cnv;
 let controlPanel;
 
-// Rows
+// Rows for HUD
 let row1, row2, row3, row4, row5;
 
-// Buttons
+// Buttons (HUD)
 let spawnBtn, huntBtn, burstBtn, novaBtn;
 
-// Numeric inputs
-let aggressionInput, gravityInput, speedInput;
+// Numeric inputs (HUD)
+let agroInput, gravityInput, speedInput; // "Agro" is the renamed "Aggression"
 
-// Meters
+// Meters (HUD)
 let novaMeter, novaCooldownMeter, huntMeter, abyssMeter;
 
 // ---------------- Touch Control Variables ----------------
 let dPadActive = false;
 let touchStartX = 0;
 let touchStartY = 0;
-let dPadCenterX = 80;  // Adjust as needed
-let dPadCenterY = 820; // Adjust as needed
+let dPadCenterX = 80;  // Center position for the virtual d-pad (adjust as needed)
+let dPadCenterY = 820; // Adjust based on your canvas/controlPanel placement
 let dPadRadius = 50;
+
+// D-Pad on-screen buttons & direction vector
+let dPadContainer;
+let dPadUp, dPadDown, dPadLeft, dPadRight;
+let dPadDirection; // p5.Vector to hold current D-Pad direction
 
 // ---------------- Setup ----------------
 function setup() {
@@ -112,7 +118,7 @@ function setup() {
     meter.novacooldown::-moz-meter-bar { background: #555555; }
   `).parent(document.head);
 
-  // Control Panel
+  // Create Control Panel (HUD)
   controlPanel = createDiv();
   controlPanel.parent(container);
   controlPanel.style("background", "black");
@@ -123,7 +129,7 @@ function setup() {
   controlPanel.style("max-width", "1200px");
   controlPanel.style("font-family", "sans-serif");
 
-  // --- Row 1: Buttons (Spawn, Hunt, Burst, Nova) ---
+  // --- Row 1: Buttons ---
   row1 = createDiv();
   row1.parent(controlPanel);
   row1.style("display", "flex");
@@ -162,7 +168,7 @@ function setup() {
   burstBtn.style("color", "#00FFFF");
   novaBtn.style("color", "#00FFFF");
 
-  // --- Row 2: Numeric Inputs (Aggression, Gravity, Speed) ---
+  // --- Row 2: Numeric Inputs (Agro, Gravity, Speed) ---
   row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
@@ -171,11 +177,11 @@ function setup() {
   row2.style("gap", "20px");
   row2.style("margin-bottom", "5px");
 
-  aggressionInput = createInput('1.7', 'number');
-  aggressionInput.parent(row2);
-  aggressionInput.style("font-size", "18px");
-  aggressionInput.style("width", "60px");
-  aggressionInput.style("text-align", "center");
+  agroInput = createInput('1.7', 'number'); // Renamed from aggression to agro
+  agroInput.parent(row2);
+  agroInput.style("font-size", "18px");
+  agroInput.style("width", "60px");
+  agroInput.style("text-align", "center");
 
   gravityInput = createInput('1.5', 'number');
   gravityInput.parent(row2);
@@ -189,7 +195,7 @@ function setup() {
   speedInput.style("width", "60px");
   speedInput.style("text-align", "center");
 
-  // --- Row 3: Labels for Inputs (Aggression, Gravity, Speed) ---
+  // --- Row 3: Labels for Inputs (Agro, Gravity, Speed) ---
   row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
@@ -198,10 +204,10 @@ function setup() {
   row3.style("gap", "60px");
   row3.style("margin-bottom", "10px");
 
-  let aggLabel = createSpan("Aggression");
-  aggLabel.parent(row3);
-  aggLabel.style("font-size", "14px");
-  aggLabel.style("color", "#CCCCCC");
+  let agroLabel = createSpan("Agro");
+  agroLabel.parent(row3);
+  agroLabel.style("font-size", "14px");
+  agroLabel.style("color", "#CCCCCC");
 
   let gravLabel = createSpan("Gravity");
   gravLabel.parent(row3);
@@ -265,6 +271,62 @@ function setup() {
   abyssMeter.addClass("abyss");
   abyssMeter.style("width", "200px");
   abyssMeter.style("height", "20px");
+
+  // --- Create D-Pad for Mobile Controls ---
+  dPadContainer = createDiv();
+  dPadContainer.parent(container);
+  dPadContainer.style("position", "absolute");
+  dPadContainer.style("bottom", "100px"); // Adjust as needed
+  dPadContainer.style("left", "10px");
+  dPadContainer.style("display", "flex");
+  dPadContainer.style("flex-direction", "column");
+  dPadContainer.style("align-items", "center");
+  dPadContainer.style("gap", "5px");
+
+  // D-Pad Row 1: Up button
+  let dPadRow1 = createDiv();
+  dPadRow1.parent(dPadContainer);
+  dPadRow1.style("display", "flex");
+  dPadRow1.style("justify-content", "center");
+  dPadUp = createButton("↑");
+  dPadUp.parent(dPadRow1);
+  dPadUp.style("font-size", "18px");
+  dPadUp.style("padding", "5px 10px");
+  dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
+  dPadUp.mouseReleased(() => { dPadDirection.set(0, 0); });
+
+  // D-Pad Row 2: Left and Right buttons
+  let dPadRow2 = createDiv();
+  dPadRow2.parent(dPadContainer);
+  dPadRow2.style("display", "flex");
+  dPadRow2.style("justify-content", "space-between");
+  dPadLeft = createButton("←");
+  dPadLeft.parent(dPadRow2);
+  dPadLeft.style("font-size", "18px");
+  dPadLeft.style("padding", "5px 10px");
+  dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
+  dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
+  dPadRight = createButton("→");
+  dPadRight.parent(dPadRow2);
+  dPadRight.style("font-size", "18px");
+  dPadRight.style("padding", "5px 10px");
+  dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
+  dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
+
+  // D-Pad Row 3: Down button
+  let dPadRow3 = createDiv();
+  dPadRow3.parent(dPadContainer);
+  dPadRow3.style("display", "flex");
+  dPadRow3.style("justify-content", "center");
+  dPadDown = createButton("↓");
+  dPadDown.parent(dPadRow3);
+  dPadDown.style("font-size", "18px");
+  dPadDown.style("padding", "5px 10px");
+  dPadDown.mousePressed(() => { dPadDirection.set(dPadDirection.x, 1); });
+  dPadDown.mouseReleased(() => { dPadDirection.y = 0; });
+
+  // Initialize dPadDirection vector
+  dPadDirection = createVector(0, 0);
 
   // Initialize simulation
   resetSimulation();
@@ -373,7 +435,17 @@ function draw() {
   background(0);
   handleKeyboard();
 
-  let simSpeed = parseFloat(aggressionInput.value());
+  // D-Pad continuous movement
+  if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
+    singularity.pos.x += dPadDirection.x * moveSpeed;
+    singularity.pos.y += dPadDirection.y * moveSpeed;
+  }
+
+  // Touch controls (swipe)
+  // Multiplier increased from 0.05 to 1.0 for better responsiveness
+  // (Handled in touchMoved below.)
+
+  let simSpeed = parseFloat(agroInput.value());
   let gravPull = parseFloat(gravityInput.value());
 
   spawnTimer += deltaTime;
@@ -475,13 +547,13 @@ function touchMoved() {
     if (dPadActive) {
       let dx = t.x - dPadCenterX;
       let dy = t.y - dPadCenterY;
-      singularity.pos.x += dx * 0.05;
-      singularity.pos.y += dy * 0.05;
+      singularity.pos.x += dx * 1.0;
+      singularity.pos.y += dy * 1.0;
     } else {
       let dx = t.x - touchStartX;
       let dy = t.y - touchStartY;
-      singularity.pos.x += dx * 0.05;
-      singularity.pos.y += dy * 0.05;
+      singularity.pos.x += dx * 1.0;
+      singularity.pos.y += dy * 1.0;
       touchStartX = t.x;
       touchStartY = t.y;
     }
@@ -627,7 +699,7 @@ class Tendril {
         this.boostTimer--;
       }
       this.vel.add(this.acc);
-      this.vel.limit(this.maxSpeed * parseFloat(aggressionInput.value()));
+      this.vel.limit(this.maxSpeed * parseFloat(agroInput.value()));
       this.pos.add(this.vel);
       this.acc.mult(0);
     }
@@ -704,7 +776,6 @@ function drawExplosion() {
   pop();
 }
 
-// End of main code. ----------------
 // ---------------- Touch Controls ----------------
 function touchStarted() {
   if (touches.length > 0) {
@@ -728,13 +799,13 @@ function touchMoved() {
     if (dPadActive) {
       let dx = t.x - dPadCenterX;
       let dy = t.y - dPadCenterY;
-      singularity.pos.x += dx * 0.05;
-      singularity.pos.y += dy * 0.05;
+      singularity.pos.x += dx * 1.0;
+      singularity.pos.y += dy * 1.0;
     } else {
       let dx = t.x - touchStartX;
       let dy = t.y - touchStartY;
-      singularity.pos.x += dx * 0.05;
-      singularity.pos.y += dy * 0.05;
+      singularity.pos.x += dx * 1.0;
+      singularity.pos.y += dy * 1.0;
       touchStartX = t.x;
       touchStartY = t.y;
     }
@@ -745,4 +816,1027 @@ function touchMoved() {
 function touchEnded() {
   dPadActive = false;
   return false;
+}
+
+// ---------------- Singularity Class ----------------
+class Singularity {
+  constructor(x, y) {
+    this.pos = createVector(x, y);
+    this.baseRadius = 15;
+    this.radius = this.baseRadius;
+    this.pulseSpeed = 0.05;
+    this.state = "healthy";
+    this.assimilationTimer = 0;
+    this.respawnTimer = 0;
+    this.currentColor = color(255,215,0);
+  }
+
+  update() {
+    if (this.state === "healthy") {
+      this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
+      let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
+      let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
+      let p = abyssAccumulator / ABSYSS_THRESHOLD;
+      if (p < 0.5) {
+        this.currentColor = baseColor;
+      } else if (p < 1) {
+        let u = (p - 0.5) / 0.5;
+        this.currentColor = lerpColor(baseColor, color(255,0,255), u);
+      } else {
+        this.state = "assimilating";
+        this.assimilationTimer = 0;
+        this.currentColor = color(255,0,255);
+      }
+    } else if (this.state === "assimilating") {
+      this.assimilationTimer += deltaTime;
+      if (this.assimilationTimer < 2000) {
+        let t = this.assimilationTimer / 2000;
+        this.currentColor = lerpColor(color(255,0,255), color(0,0,0), t);
+      } else {
+        this.state = "dead";
+        this.respawnTimer = 0;
+        this.currentColor = color(0,0,0);
+      }
+    } else if (this.state === "dead") {
+      this.respawnTimer += deltaTime;
+      if (this.respawnTimer > 7000) {
+        this.state = "healthy";
+        this.assimilationTimer = 0;
+        this.respawnTimer = 0;
+        abyssAccumulator = 0;
+        this.currentColor = color(255,215,0);
+      }
+    }
+  }
+
+  show() {
+    noStroke();
+    if (this.state === "dead") {
+      stroke(255,0,255);
+      strokeWeight(2);
+    }
+    fill(this.currentColor);
+    ellipse(this.pos.x, this.pos.y, this.radius * 2, this.radius * 2);
+    noStroke();
+  }
+}
+
+// ---------------- Tendril Class ----------------
+class Tendril {
+  constructor() {
+    let edge = floor(random(4));
+    if (edge === 0) { this.pos = createVector(random(width), 0); }
+    else if (edge === 1) { this.pos = createVector(width, random(height)); }
+    else if (edge === 2) { this.pos = createVector(random(width), height); }
+    else { this.pos = createVector(0, random(height)); }
+
+    this.vel = createVector(0, 0);
+    this.acc = createVector(0, 0);
+    this.maxSpeed = 3;
+    this.tail = [];
+    this.tailMax = 20;
+    this.boostTimer = 0;
+    this.immolating = false;
+    this.immolateTimer = 0;
+    this.immolateDuration = 2000;
+    this.dead = false;
+  }
+
+  autoHunt(targetPos) {
+    let force = p5.Vector.sub(targetPos, this.pos);
+    force.setMag(random(1, 2));
+    this.vel = force;
+  }
+
+  hunt(targetPos) {
+    this.boostTimer = 30;
+  }
+
+  orbit(targetPos, pullStrength) {
+    let desired = p5.Vector.sub(targetPos, this.pos);
+    let tangent = createVector(-desired.y, desired.x);
+    tangent.normalize();
+    tangent.mult(pullStrength);
+    desired.normalize();
+    desired.mult(pullStrength);
+    this.acc.add(p5.Vector.add(desired, tangent));
+  }
+
+  startImmolation() {
+    if (!this.immolating) {
+      this.immolating = true;
+      this.immolateTimer = 0;
+    }
+  }
+
+  update() {
+    if (!simulationRunning) return;
+
+    if (this.immolating) {
+      this.immolateTimer += deltaTime;
+      if (this.immolateTimer > this.immolateDuration) {
+        this.dead = true;
+      }
+    } else {
+      let d = p5.Vector.dist(this.pos, singularity.pos);
+      if (d > ORBIT_DISTANCE) {
+        let baseForce = p5.Vector.sub(singularity.pos, this.pos);
+        baseForce.setMag(0.05);
+        this.acc.add(baseForce);
+      }
+      if (this.boostTimer > 0) {
+        let boostForce = p5.Vector.sub(singularity.pos, this.pos);
+        boostForce.setMag(0.2);
+        this.acc.add(boostForce);
+        this.boostTimer--;
+      }
+      this.vel.add(this.acc);
+      this.vel.limit(this.maxSpeed * parseFloat(agroInput.value()));
+      this.pos.add(this.vel);
+      this.acc.mult(0);
+    }
+
+    this.tail.push(this.pos.copy());
+    if (this.tail.length > this.tailMax) {
+      this.tail.shift();
+    }
+  }
+
+  show() {
+    noStroke();
+    let drawColor;
+    if (this.immolating) {
+      if (this.immolateTimer < this.immolateDuration / 2) {
+        let amt = this.immolateTimer / (this.immolateDuration / 2);
+        drawColor = lerpColor(purpleColor, cyanColor, amt);
+      } else {
+        let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
+        drawColor = lerpColor(cyanColor, blackColor, amt);
+      }
+    } else {
+      drawColor = color(130, 0, 130);
+    }
+    fill(drawColor);
+    ellipse(this.pos.x, this.pos.y, 7, 7);
+
+    strokeWeight(1);
+    noFill();
+    beginShape();
+    for (let i = 0; i < this.tail.length; i++) {
+      let pos = this.tail[i];
+      let alpha = map(i, 0, this.tail.length, 0, 255);
+      stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
+      vertex(pos.x, pos.y);
+    }
+    endShape();
+  }
+}
+
+// ---------------- Explosion Effect ----------------
+function drawExplosion() {
+  push();
+  translate(singularity.pos.x, singularity.pos.y);
+  let steps = 5;
+  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
+
+  if (explosionType === "nova") {
+    stroke(0,255,255, alphaVal);
+  } else if (explosionType === "burst") {
+    stroke(255,215,0, alphaVal);
+  } else if (explosionType === "death") {
+    stroke(255,0,255, alphaVal);
+  } else {
+    stroke(255,215,0, alphaVal);
+  }
+
+  noFill();
+  for (let i = 0; i < 20; i++) {
+    push();
+    rotate(random(TWO_PI));
+    beginShape();
+    let len = random(20, 50);
+    vertex(0, 0);
+    for (let j = 0; j < steps; j++) {
+      let angle = random(-Math.PI/4, Math.PI/4);
+      let x = cos(angle) * len;
+      let y = sin(angle) * len;
+      vertex(x, y);
+    }
+    endShape();
+    pop();
+  }
+  pop();
+}
+
+// ---------------- Touch Controls ----------------
+function touchStarted() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    // If touch begins in left 30% of canvas, check for d-pad activation
+    if (t.x < width * 0.3) {
+      if (dist(t.x, t.y, dPadCenterX, dPadCenterY) < dPadRadius) {
+        dPadActive = true;
+      }
+    } else {
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchMoved() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    if (dPadActive) {
+      let dx = t.x - dPadCenterX;
+      let dy = t.y - dPadCenterY;
+      singularity.pos.x += dx * 1.0;
+      singularity.pos.y += dy * 1.0;
+    } else {
+      let dx = t.x - touchStartX;
+      let dy = t.y - touchStartY;
+      singularity.pos.x += dx * 1.0;
+      singularity.pos.y += dy * 1.0;
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchEnded() {
+  dPadActive = false;
+  return false;
+}
+
+// ---------------- Singularity Class ----------------
+class Singularity {
+  constructor(x, y) {
+    this.pos = createVector(x, y);
+    this.baseRadius = 15;
+    this.radius = this.baseRadius;
+    this.pulseSpeed = 0.05;
+    this.state = "healthy";
+    this.assimilationTimer = 0;
+    this.respawnTimer = 0;
+    this.currentColor = color(255,215,0);
+  }
+
+  update() {
+    if (this.state === "healthy") {
+      this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
+      let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
+      let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
+      let p = abyssAccumulator / ABSYSS_THRESHOLD;
+      if (p < 0.5) {
+        this.currentColor = baseColor;
+      } else if (p < 1) {
+        let u = (p - 0.5) / 0.5;
+        this.currentColor = lerpColor(baseColor, color(255,0,255), u);
+      } else {
+        this.state = "assimilating";
+        this.assimilationTimer = 0;
+        this.currentColor = color(255,0,255);
+      }
+    } else if (this.state === "assimilating") {
+      this.assimilationTimer += deltaTime;
+      if (this.assimilationTimer < 2000) {
+        let t = this.assimilationTimer / 2000;
+        this.currentColor = lerpColor(color(255,0,255), color(0,0,0), t);
+      } else {
+        this.state = "dead";
+        this.respawnTimer = 0;
+        this.currentColor = color(0,0,0);
+      }
+    } else if (this.state === "dead") {
+      this.respawnTimer += deltaTime;
+      if (this.respawnTimer > 7000) {
+        this.state = "healthy";
+        this.assimilationTimer = 0;
+        this.respawnTimer = 0;
+        abyssAccumulator = 0;
+        this.currentColor = color(255,215,0);
+      }
+    }
+  }
+
+  show() {
+    noStroke();
+    if (this.state === "dead") {
+      stroke(255,0,255);
+      strokeWeight(2);
+    }
+    fill(this.currentColor);
+    ellipse(this.pos.x, this.pos.y, this.radius * 2, this.radius * 2);
+    noStroke();
+  }
+}
+
+// ---------------- Tendril Class ----------------
+class Tendril {
+  constructor() {
+    let edge = floor(random(4));
+    if (edge === 0) { this.pos = createVector(random(width), 0); }
+    else if (edge === 1) { this.pos = createVector(width, random(height)); }
+    else if (edge === 2) { this.pos = createVector(random(width), height); }
+    else { this.pos = createVector(0, random(height)); }
+
+    this.vel = createVector(0, 0);
+    this.acc = createVector(0, 0);
+    this.maxSpeed = 3;
+    this.tail = [];
+    this.tailMax = 20;
+    this.boostTimer = 0;
+    this.immolating = false;
+    this.immolateTimer = 0;
+    this.immolateDuration = 2000;
+    this.dead = false;
+  }
+
+  autoHunt(targetPos) {
+    let force = p5.Vector.sub(targetPos, this.pos);
+    force.setMag(random(1, 2));
+    this.vel = force;
+  }
+
+  hunt(targetPos) {
+    this.boostTimer = 30;
+  }
+
+  orbit(targetPos, pullStrength) {
+    let desired = p5.Vector.sub(targetPos, this.pos);
+    let tangent = createVector(-desired.y, desired.x);
+    tangent.normalize();
+    tangent.mult(pullStrength);
+    desired.normalize();
+    desired.mult(pullStrength);
+    this.acc.add(p5.Vector.add(desired, tangent));
+  }
+
+  startImmolation() {
+    if (!this.immolating) {
+      this.immolating = true;
+      this.immolateTimer = 0;
+    }
+  }
+
+  update() {
+    if (!simulationRunning) return;
+
+    if (this.immolating) {
+      this.immolateTimer += deltaTime;
+      if (this.immolateTimer > this.immolateDuration) {
+        this.dead = true;
+      }
+    } else {
+      let d = p5.Vector.dist(this.pos, singularity.pos);
+      if (d > ORBIT_DISTANCE) {
+        let baseForce = p5.Vector.sub(singularity.pos, this.pos);
+        baseForce.setMag(0.05);
+        this.acc.add(baseForce);
+      }
+      if (this.boostTimer > 0) {
+        let boostForce = p5.Vector.sub(singularity.pos, this.pos);
+        boostForce.setMag(0.2);
+        this.acc.add(boostForce);
+        this.boostTimer--;
+      }
+      this.vel.add(this.acc);
+      this.vel.limit(this.maxSpeed * parseFloat(agroInput.value()));
+      this.pos.add(this.vel);
+      this.acc.mult(0);
+    }
+
+    this.tail.push(this.pos.copy());
+    if (this.tail.length > this.tailMax) {
+      this.tail.shift();
+    }
+  }
+
+  show() {
+    noStroke();
+    let drawColor;
+    if (this.immolating) {
+      if (this.immolateTimer < this.immolateDuration / 2) {
+        let amt = this.immolateTimer / (this.immolateDuration / 2);
+        drawColor = lerpColor(purpleColor, cyanColor, amt);
+      } else {
+        let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
+        drawColor = lerpColor(cyanColor, blackColor, amt);
+      }
+    } else {
+      drawColor = color(130, 0, 130);
+    }
+    fill(drawColor);
+    ellipse(this.pos.x, this.pos.y, 7, 7);
+
+    strokeWeight(1);
+    noFill();
+    beginShape();
+    for (let i = 0; i < this.tail.length; i++) {
+      let pos = this.tail[i];
+      let alpha = map(i, 0, this.tail.length, 0, 255);
+      stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
+      vertex(pos.x, pos.y);
+    }
+    endShape();
+  }
+}
+
+// ---------------- Explosion Effect ----------------
+function drawExplosion() {
+  push();
+  translate(singularity.pos.x, singularity.pos.y);
+  let steps = 5;
+  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
+
+  if (explosionType === "nova") {
+    stroke(0,255,255, alphaVal);
+  } else if (explosionType === "burst") {
+    stroke(255,215,0, alphaVal);
+  } else if (explosionType === "death") {
+    stroke(255,0,255, alphaVal);
+  } else {
+    stroke(255,215,0, alphaVal);
+  }
+
+  noFill();
+  for (let i = 0; i < 20; i++) {
+    push();
+    rotate(random(TWO_PI));
+    beginShape();
+    let len = random(20, 50);
+    vertex(0, 0);
+    for (let j = 0; j < steps; j++) {
+      let angle = random(-Math.PI/4, Math.PI/4);
+      let x = cos(angle) * len;
+      let y = sin(angle) * len;
+      vertex(x, y);
+    }
+    endShape();
+    pop();
+  }
+  pop();
+}
+
+// ---------------- Touch Controls ----------------
+function touchStarted() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    if (t.x < width * 0.3) {
+      if (dist(t.x, t.y, dPadCenterX, dPadCenterY) < dPadRadius) {
+        dPadActive = true;
+      }
+    } else {
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchMoved() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    if (dPadActive) {
+      let dx = t.x - dPadCenterX;
+      let dy = t.y - dPadCenterY;
+      singularity.pos.x += dx * 1.0;
+      singularity.pos.y += dy * 1.0;
+    } else {
+      let dx = t.x - touchStartX;
+      let dy = t.y - touchStartY;
+      singularity.pos.x += dx * 1.0;
+      singularity.pos.y += dy * 1.0;
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchEnded() {
+  dPadActive = false;
+  return false;
+}
+
+// ---------------- D-Pad (On-Screen Buttons) ----------------
+function createDPad() {
+  let dPadCont = createDiv();
+  dPadCont.parent(container);
+  dPadCont.style("position", "absolute");
+  dPadCont.style("bottom", "150px");
+  dPadCont.style("left", "10px");
+  dPadCont.style("display", "flex");
+  dPadCont.style("flex-direction", "column");
+  dPadCont.style("align-items", "center");
+  dPadCont.style("gap", "5px");
+
+  // Row 1: Up button
+  let dPadRow1 = createDiv();
+  dPadRow1.parent(dPadCont);
+  dPadRow1.style("display", "flex");
+  dPadRow1.style("justify-content", "center");
+  dPadUp = createButton("↑");
+  dPadUp.parent(dPadRow1);
+  dPadUp.style("font-size", "18px");
+  dPadUp.style("padding", "5px 10px");
+  dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
+  dPadUp.mouseReleased(() => { dPadDirection.y = 0; });
+
+  // Row 2: Left and Right buttons
+  let dPadRow2 = createDiv();
+  dPadRow2.parent(dPadCont);
+  dPadRow2.style("display", "flex");
+  dPadRow2.style("justify-content", "space-between");
+  dPadLeft = createButton("←");
+  dPadLeft.parent(dPadRow2);
+  dPadLeft.style("font-size", "18px");
+  dPadLeft.style("padding", "5px 10px");
+  dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
+  dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
+  dPadRight = createButton("→");
+  dPadRight.parent(dPadRow2);
+  dPadRight.style("font-size", "18px");
+  dPadRight.style("padding", "5px 10px");
+  dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
+  dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
+
+  // Row 3: Down button
+  let dPadRow3 = createDiv();
+  dPadRow3.parent(dPadCont);
+  dPadRow3.style("display", "flex");
+  dPadRow3.style("justify-content", "center");
+  dPadDown = createButton("↓");
+  dPadDown.parent(dPadRow3);
+  dPadDown.style("font-size", "18px");
+  dPadDown.style("padding", "5px 10px");
+  dPadDown.mousePressed(() => { dPadDirection.set(dPadDirection.x, 1); });
+  dPadDown.mouseReleased(() => { dPadDirection.y = 0; });
+
+  dPadDirection = createVector(0, 0);
+}
+
+createDPad();
+
+// ---------------- Singularity Class ----------------
+class Singularity {
+  constructor(x, y) {
+    this.pos = createVector(x, y);
+    this.baseRadius = 15;
+    this.radius = this.baseRadius;
+    this.pulseSpeed = 0.05;
+    this.state = "healthy";
+    this.assimilationTimer = 0;
+    this.respawnTimer = 0;
+    this.currentColor = color(255,215,0);
+  }
+
+  update() {
+    if (this.state === "healthy") {
+      this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
+      let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
+      let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
+      let p = abyssAccumulator / ABSYSS_THRESHOLD;
+      if (p < 0.5) {
+        this.currentColor = baseColor;
+      } else if (p < 1) {
+        let u = (p - 0.5) / 0.5;
+        this.currentColor = lerpColor(baseColor, color(255,0,255), u);
+      } else {
+        this.state = "assimilating";
+        this.assimilationTimer = 0;
+        this.currentColor = color(255,0,255);
+      }
+    } else if (this.state === "assimilating") {
+      this.assimilationTimer += deltaTime;
+      if (this.assimilationTimer < 2000) {
+        let t = this.assimilationTimer / 2000;
+        this.currentColor = lerpColor(color(255,0,255), color(0,0,0), t);
+      } else {
+        this.state = "dead";
+        this.respawnTimer = 0;
+        this.currentColor = color(0,0,0);
+      }
+    } else if (this.state === "dead") {
+      this.respawnTimer += deltaTime;
+      if (this.respawnTimer > 7000) {
+        this.state = "healthy";
+        this.assimilationTimer = 0;
+        this.respawnTimer = 0;
+        abyssAccumulator = 0;
+        this.currentColor = color(255,215,0);
+      }
+    }
+  }
+
+  show() {
+    noStroke();
+    if (this.state === "dead") {
+      stroke(255,0,255);
+      strokeWeight(2);
+    }
+    fill(this.currentColor);
+    ellipse(this.pos.x, this.pos.y, this.radius * 2, this.radius * 2);
+    noStroke();
+  }
+}
+
+// ---------------- Tendril Class ----------------
+class Tendril {
+  constructor() {
+    let edge = floor(random(4));
+    if (edge === 0) { this.pos = createVector(random(width), 0); }
+    else if (edge === 1) { this.pos = createVector(width, random(height)); }
+    else if (edge === 2) { this.pos = createVector(random(width), height); }
+    else { this.pos = createVector(0, random(height)); }
+
+    this.vel = createVector(0, 0);
+    this.acc = createVector(0, 0);
+    this.maxSpeed = 3;
+    this.tail = [];
+    this.tailMax = 20;
+    this.boostTimer = 0;
+    this.immolating = false;
+    this.immolateTimer = 0;
+    this.immolateDuration = 2000;
+    this.dead = false;
+  }
+
+  autoHunt(targetPos) {
+    let force = p5.Vector.sub(targetPos, this.pos);
+    force.setMag(random(1, 2));
+    this.vel = force;
+  }
+
+  hunt(targetPos) {
+    this.boostTimer = 30;
+  }
+
+  orbit(targetPos, pullStrength) {
+    let desired = p5.Vector.sub(targetPos, this.pos);
+    let tangent = createVector(-desired.y, desired.x);
+    tangent.normalize();
+    tangent.mult(pullStrength);
+    desired.normalize();
+    desired.mult(pullStrength);
+    this.acc.add(p5.Vector.add(desired, tangent));
+  }
+
+  startImmolation() {
+    if (!this.immolating) {
+      this.immolating = true;
+      this.immolateTimer = 0;
+    }
+  }
+
+  update() {
+    if (!simulationRunning) return;
+
+    if (this.immolating) {
+      this.immolateTimer += deltaTime;
+      if (this.immolateTimer > this.immolateDuration) {
+        this.dead = true;
+      }
+    } else {
+      let d = p5.Vector.dist(this.pos, singularity.pos);
+      if (d > ORBIT_DISTANCE) {
+        let baseForce = p5.Vector.sub(singularity.pos, this.pos);
+        baseForce.setMag(0.05);
+        this.acc.add(baseForce);
+      }
+      if (this.boostTimer > 0) {
+        let boostForce = p5.Vector.sub(singularity.pos, this.pos);
+        boostForce.setMag(0.2);
+        this.acc.add(boostForce);
+        this.boostTimer--;
+      }
+      this.vel.add(this.acc);
+      this.vel.limit(this.maxSpeed * parseFloat(agroInput.value()));
+      this.pos.add(this.vel);
+      this.acc.mult(0);
+    }
+
+    this.tail.push(this.pos.copy());
+    if (this.tail.length > this.tailMax) {
+      this.tail.shift();
+    }
+  }
+
+  show() {
+    noStroke();
+    let drawColor;
+    if (this.immolating) {
+      if (this.immolateTimer < this.immolateDuration / 2) {
+        let amt = this.immolateTimer / (this.immolateDuration / 2);
+        drawColor = lerpColor(purpleColor, cyanColor, amt);
+      } else {
+        let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
+        drawColor = lerpColor(cyanColor, blackColor, amt);
+      }
+    } else {
+      drawColor = color(130, 0, 130);
+    }
+    fill(drawColor);
+    ellipse(this.pos.x, this.pos.y, 7, 7);
+
+    strokeWeight(1);
+    noFill();
+    beginShape();
+    for (let i = 0; i < this.tail.length; i++) {
+      let pos = this.tail[i];
+      let alpha = map(i, 0, this.tail.length, 0, 255);
+      stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
+      vertex(pos.x, pos.y);
+    }
+    endShape();
+  }
+}
+
+// ---------------- Explosion Effect ----------------
+function drawExplosion() {
+  push();
+  translate(singularity.pos.x, singularity.pos.y);
+  let steps = 5;
+  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
+
+  if (explosionType === "nova") {
+    stroke(0,255,255, alphaVal);
+  } else if (explosionType === "burst") {
+    stroke(255,215,0, alphaVal);
+  } else if (explosionType === "death") {
+    stroke(255,0,255, alphaVal);
+  } else {
+    stroke(255,215,0, alphaVal);
+  }
+
+  noFill();
+  for (let i = 0; i < 20; i++) {
+    push();
+    rotate(random(TWO_PI));
+    beginShape();
+    let len = random(20, 50);
+    vertex(0, 0);
+    for (let j = 0; j < steps; j++) {
+      let angle = random(-Math.PI/4, Math.PI/4);
+      let x = cos(angle) * len;
+      let y = sin(angle) * len;
+      vertex(x, y);
+    }
+    endShape();
+    pop();
+  }
+  pop();
+}
+
+// ---------------- Touch Controls ----------------
+function touchStarted() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    if (t.x < width * 0.3) {
+      if (dist(t.x, t.y, dPadCenterX, dPadCenterY) < dPadRadius) {
+        dPadActive = true;
+      }
+    } else {
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchMoved() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    if (dPadActive) {
+      let dx = t.x - dPadCenterX;
+      let dy = t.y - dPadCenterY;
+      singularity.pos.x += dx * 1.0;
+      singularity.pos.y += dy * 1.0;
+    } else {
+      let dx = t.x - touchStartX;
+      let dy = t.y - touchStartY;
+      singularity.pos.x += dx * 1.0;
+      singularity.pos.y += dy * 1.0;
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchEnded() {
+  dPadActive = false;
+  return false;
+}
+
+// ---------------- Singularity Class ----------------
+class Singularity {
+  constructor(x, y) {
+    this.pos = createVector(x, y);
+    this.baseRadius = 15;
+    this.radius = this.baseRadius;
+    this.pulseSpeed = 0.05;
+    this.state = "healthy";
+    this.assimilationTimer = 0;
+    this.respawnTimer = 0;
+    this.currentColor = color(255,215,0);
+  }
+
+  update() {
+    if (this.state === "healthy") {
+      this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
+      let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
+      let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
+      let p = abyssAccumulator / ABSYSS_THRESHOLD;
+      if (p < 0.5) {
+        this.currentColor = baseColor;
+      } else if (p < 1) {
+        let u = (p - 0.5) / 0.5;
+        this.currentColor = lerpColor(baseColor, color(255,0,255), u);
+      } else {
+        this.state = "assimilating";
+        this.assimilationTimer = 0;
+        this.currentColor = color(255,0,255);
+      }
+    } else if (this.state === "assimilating") {
+      this.assimilationTimer += deltaTime;
+      if (this.assimilationTimer < 2000) {
+        let t = this.assimilationTimer / 2000;
+        this.currentColor = lerpColor(color(255,0,255), color(0,0,0), t);
+      } else {
+        this.state = "dead";
+        this.respawnTimer = 0;
+        this.currentColor = color(0,0,0);
+      }
+    } else if (this.state === "dead") {
+      this.respawnTimer += deltaTime;
+      if (this.respawnTimer > 7000) {
+        this.state = "healthy";
+        this.assimilationTimer = 0;
+        this.respawnTimer = 0;
+        abyssAccumulator = 0;
+        this.currentColor = color(255,215,0);
+      }
+    }
+  }
+
+  show() {
+    noStroke();
+    if (this.state === "dead") {
+      stroke(255,0,255);
+      strokeWeight(2);
+    }
+    fill(this.currentColor);
+    ellipse(this.pos.x, this.pos.y, this.radius * 2, this.radius * 2);
+    noStroke();
+  }
+}
+
+// ---------------- Tendril Class ----------------
+class Tendril {
+  constructor() {
+    let edge = floor(random(4));
+    if (edge === 0) { this.pos = createVector(random(width), 0); }
+    else if (edge === 1) { this.pos = createVector(width, random(height)); }
+    else if (edge === 2) { this.pos = createVector(random(width), height); }
+    else { this.pos = createVector(0, random(height)); }
+
+    this.vel = createVector(0, 0);
+    this.acc = createVector(0, 0);
+    this.maxSpeed = 3;
+    this.tail = [];
+    this.tailMax = 20;
+    this.boostTimer = 0;
+    this.immolating = false;
+    this.immolateTimer = 0;
+    this.immolateDuration = 2000;
+    this.dead = false;
+  }
+
+  autoHunt(targetPos) {
+    let force = p5.Vector.sub(targetPos, this.pos);
+    force.setMag(random(1, 2));
+    this.vel = force;
+  }
+
+  hunt(targetPos) {
+    this.boostTimer = 30;
+  }
+
+  orbit(targetPos, pullStrength) {
+    let desired = p5.Vector.sub(targetPos, this.pos);
+    let tangent = createVector(-desired.y, desired.x);
+    tangent.normalize();
+    tangent.mult(pullStrength);
+    desired.normalize();
+    desired.mult(pullStrength);
+    this.acc.add(p5.Vector.add(desired, tangent));
+  }
+
+  startImmolation() {
+    if (!this.immolating) {
+      this.immolating = true;
+      this.immolateTimer = 0;
+    }
+  }
+
+  update() {
+    if (!simulationRunning) return;
+
+    if (this.immolating) {
+      this.immolateTimer += deltaTime;
+      if (this.immolateTimer > this.immolateDuration) {
+        this.dead = true;
+      }
+    } else {
+      let d = p5.Vector.dist(this.pos, singularity.pos);
+      if (d > ORBIT_DISTANCE) {
+        let baseForce = p5.Vector.sub(singularity.pos, this.pos);
+        baseForce.setMag(0.05);
+        this.acc.add(baseForce);
+      }
+      if (this.boostTimer > 0) {
+        let boostForce = p5.Vector.sub(singularity.pos, this.pos);
+        boostForce.setMag(0.2);
+        this.acc.add(boostForce);
+        this.boostTimer--;
+      }
+      this.vel.add(this.acc);
+      this.vel.limit(this.maxSpeed * parseFloat(agroInput.value()));
+      this.pos.add(this.vel);
+      this.acc.mult(0);
+    }
+
+    this.tail.push(this.pos.copy());
+    if (this.tail.length > this.tailMax) {
+      this.tail.shift();
+    }
+  }
+
+  show() {
+    noStroke();
+    let drawColor;
+    if (this.immolating) {
+      if (this.immolateTimer < this.immolateDuration / 2) {
+        let amt = this.immolateTimer / (this.immolateDuration / 2);
+        drawColor = lerpColor(purpleColor, cyanColor, amt);
+      } else {
+        let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
+        drawColor = lerpColor(cyanColor, blackColor, amt);
+      }
+    } else {
+      drawColor = color(130, 0, 130);
+    }
+    fill(drawColor);
+    ellipse(this.pos.x, this.pos.y, 7, 7);
+
+    strokeWeight(1);
+    noFill();
+    beginShape();
+    for (let i = 0; i < this.tail.length; i++) {
+      let pos = this.tail[i];
+      let alpha = map(i, 0, this.tail.length, 0, 255);
+      stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
+      vertex(pos.x, pos.y);
+    }
+    endShape();
+  }
+}
+
+// ---------------- Explosion Effect ----------------
+function drawExplosion() {
+  push();
+  translate(singularity.pos.x, singularity.pos.y);
+  let steps = 5;
+  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
+
+  if (explosionType === "nova") {
+    stroke(0,255,255, alphaVal);
+  } else if (explosionType === "burst") {
+    stroke(255,215,0, alphaVal);
+  } else if (explosionType === "death") {
+    stroke(255,0,255, alphaVal);
+  } else {
+    stroke(255,215,0, alphaVal);
+  }
+
+  noFill();
+  for (let i = 0; i < 20; i++) {
+    push();
+    rotate(random(TWO_PI));
+    beginShape();
+    let len = random(20, 50);
+    vertex(0, 0);
+    for (let j = 0; j < steps; j++) {
+      let angle = random(-Math.PI/4, Math.PI/4);
+      let x = cos(angle) * len;
+      let y = sin(angle) * len;
+      vertex(x, y);
+    }
+    endShape();
+    pop();
+  }
+  pop();
 }
