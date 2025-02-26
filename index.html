@@ -4,25 +4,31 @@
     <meta charset="UTF-8">
     <title>Ignis x Abyss – Life x Death</title>
     <style>
-      /* Nova and Burst meters styled as cyan */
+      /* Nova/SuperNova meters: fill color cyan, bar (empty gauge) black */
       meter.cyanMeter::-webkit-meter-bar {
+         background: black;
+      }
+      meter.cyanMeter::-webkit-meter-optimum-value {
          background: #00FFFF;
       }
       meter.cyanMeter::-moz-meter-bar {
-         background: #00FFFF;
+         background: black;
       }
-      /* Hunt and Assimilation meters styled as desaturated purple */
+      /* Hunt and Assimilation meters: fill color desaturated purple, bar black */
       meter.desatpurple::-webkit-meter-bar {
+         background: black;
+      }
+      meter.desatpurple::-webkit-meter-optimum-value {
          background: #9370DB;
       }
       meter.desatpurple::-moz-meter-bar {
-         background: #9370DB;
+         background: black;
       }
     </style>
     <!-- p5 libraries -->
     <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/p5.dom@1.0.0/lib/p5.dom.js"></script>
-    <!-- Reference the JS file exactly as named -->
+    <!-- Must exactly reference Ignis.js in the same folder -->
     <script src="Ignis.js"></script>
   </head>
   <body style="margin:0; padding:0; background:#000;">
@@ -30,8 +36,10 @@
       Ignis x Abyss – Life x Death
     </h1>
     <p style="margin:0; padding:10px; color:white;">
-      This build features: Nova meter (cyan) that fills and stays full until Nova is triggered (then resets and rebuilds), 
-      Burst meter (cyan), and Hunt/Assimilation meter (desaturated purple), plus Walls toggle and Screen Presets.
+      This build auto-triggers Nova pulses:<br/>
+      • Auto Nova Pulse every ~3 sec (kills up to 3 tendrils in orbit)<br/>
+      • SuperNova every ~10 sec (kills all tendrils, with a larger explosion)<br/>
+      Meters: Nova meters are cyan; Hunt/Assimilation meters are desaturated purple.
     </p>
   </body>
 </html>
