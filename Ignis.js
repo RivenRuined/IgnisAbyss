@@ -27,7 +27,7 @@ class Singularity {
   }
 
   update() {
-    // For now, no special logic inside update
+    // No special logic here yet
   }
 
   show() {
@@ -70,7 +70,7 @@ class Tendril {
   }
 
   hunt(targetPos) {
-    this.boostTimer = 30; // cause a direct pull
+    this.boostTimer = 30; // direct pull
   }
 
   orbit(targetPos, pullStrength) {
@@ -171,11 +171,10 @@ const ORBIT_DISTANCE=50;
 const NOVA_THRESHOLD=3500;
 const ABSYSS_THRESHOLD=13000;
 const HUNT_THRESHOLD=5000;
-const NOVA_COOLDOWN_TIME=10000;
 
-let novaTimer=0;           // Nova meter
-let huntTimer=0;           // Hunt meter
-let abyssAccumulator=0;    // assimilation
+let novaTimer=0;           
+let huntTimer=0;           
+let abyssAccumulator=0;    
 let novaCooldown=0;
 
 let spawnTimer=0;
@@ -243,14 +242,14 @@ function draw() {
   singularity.state=st;
   singularity.currentColor=c;
   
-  // 2) Nova meter logic: fill from 0..NOVA_THRESHOLD, remain at max
+  // 2) Nova meter logic
   if (novaTimer<NOVA_THRESHOLD) {
     novaTimer += deltaTime;
     if (novaTimer> NOVA_THRESHOLD) novaTimer = NOVA_THRESHOLD;
   }
   novaMeter.attribute("value", novaTimer.toString());
   
-  // 3) final speed = slider * factor
+  // 3) final speed
   let baseSpeed = speedSlider.value();
   let finalSpeed = baseSpeed * speedFactor;
   
@@ -271,13 +270,13 @@ function draw() {
   }
   huntMeter.attribute("value", huntTimer.toString());
   
-  // 6) assimilation if orbit≥3 & not black
+  // 6) assimilation
   if (getOrbitCount()>=3 && st!=="black") {
     abyssAccumulator += deltaTime;
   }
   abyssMeter.attribute("value", abyssAccumulator.toString());
   
-  // 7) update singularity & tendrils
+  // 7) update & show
   singularity.update();
   singularity.show();
   
@@ -339,7 +338,7 @@ function createHUD_Bottom() {
   novaBtn.mouseClicked(()=>{
     if (novaTimer>=NOVA_THRESHOLD) {
       triggerNovaManual();
-      novaTimer=0; // reset so it can refill
+      novaTimer=0; 
     }
   });
   
@@ -397,7 +396,7 @@ function createHUD_Bottom() {
   spdLabel.style("font-size","14px");
   spdLabel.style("color","#CCCCCC");
   
-  // Row4: Meters: Burst & Nova => both cyan
+  // Row4: Meters (cyan)
   let row4=createDiv();
   row4.parent(controlPanel);
   row4.style("display","flex");
@@ -420,7 +419,7 @@ function createHUD_Bottom() {
   novaMeter.attribute("value","0");
   novaMeter.addClass("cyanMeter");
   
-  // Row5: Meters: Hunt & Assimilation => both purple
+  // Row5: Meters (purple)
   let row5=createDiv();
   row5.parent(controlPanel);
   row5.style("display","flex");
@@ -443,7 +442,7 @@ function createHUD_Bottom() {
   abyssMeter.attribute("value","0");
   abyssMeter.addClass("desatpurple");
   
-  // Row6: Presets: Walls On/Off, Auto
+  // Row6: toggles
   let row6=createDiv();
   row6.parent(controlPanel);
   row6.style("display","flex");
@@ -485,7 +484,6 @@ function handleKeyboard(finalSpeed) {
   }
 }
 
-// spawn new tendrils
 function spawnTendrils(count) {
   for (let i=0;i<count;i++){
     let t=new Tendril();
@@ -493,25 +491,21 @@ function spawnTendrils(count) {
   }
 }
 
-// triggers the “hunt” behavior
 function triggerHunt() {
   for (let t of tendrils) {
     t.hunt(singularity.pos);
   }
 }
 
-// triggers the “repel” burst
 function triggerRepel() {
   for (let t of tendrils) {
     let force = p5.Vector.sub(t.pos, singularity.pos);
     force.setMag(10);
     t.vel.add(force);
   }
-  // visually fill the burst meter for a moment
   burstMeter.attribute("value", NOVA_THRESHOLD.toString());
 }
 
-// manual Nova
 function triggerNovaManual() {
   explosionType="nova";
   explosionTimer=explosionDuration;
@@ -520,7 +514,6 @@ function triggerNovaManual() {
   }
 }
 
-// explosion effect
 function drawExplosion() {
   noFill();
   stroke(cyanColor);
@@ -530,7 +523,6 @@ function drawExplosion() {
   noStroke();
 }
 
-// get how many are in orbit range
 function getOrbitCount() {
   let c=0;
   for (let t of tendrils) {
@@ -540,7 +532,6 @@ function getOrbitCount() {
   return c;
 }
 
-// reset assimilation
 function resetAssimilation() {
   abyssAccumulator=0;
   singularity.deadTimer=0;
@@ -548,7 +539,6 @@ function resetAssimilation() {
   singularity.currentColor=color(255,215,0);
 }
 
-// fully reset
 function resetSimulation() {
   singularity = new Singularity(width/2, height/2);
   tendrils=[];
@@ -564,7 +554,6 @@ function resetSimulation() {
   simulationRunning=true;
 }
 
-// For mobile swiping
 function touchStarted() {
   lastTouchX=mouseX;
   lastTouchY=mouseY;
@@ -576,5 +565,5 @@ function touchMoved() {
   singularity.pos.add(dx,dy);
   lastTouchX=mouseX;
   lastTouchY=mouseY;
-  return false; // prevent default
+  return false;
 }
