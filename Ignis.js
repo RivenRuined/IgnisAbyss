@@ -1,4 +1,4 @@
-console.log("Ignis.js loaded and running!!");
+console.log("Ignis.js loaded and running!");
 
 /*
   Ignis x Abyss – Life x Death
@@ -6,542 +6,15 @@ console.log("Ignis.js loaded and running!!");
 
   - "Agro" = old "Aggression"
   - "Gravity", "Speed" for keyboard & AI
-  - "Movement" for touch
+  - "Movement" for touchscreen swipes
   - D-Pad (Up, Left/Right, Down) uses mousePressed() for taps
   - Only processes swipes if (touch.x,y) is inside the canvas
 */
 
-// ---------------- Global Constants & Variables ----------------
-const TENDRIL_COUNT = 20;
-const ORBIT_DISTANCE = 50;
-const NOVA_THRESHOLD = 3500;
-const ABSYSS_THRESHOLD = 13000;
-const HUNT_THRESHOLD = 5000;
-const NOVA_COOLDOWN_TIME = 10000;
+// -------------------------------------------------------------------
+// 1) Classes declared FIRST, so nothing references Singularity too early
+// -------------------------------------------------------------------
 
-let novaTimer = 0;
-let huntTimer = 0;
-let abyssAccumulator = 0;
-let novaCooldown = 0;
-
-let spawnTimer = 0;
-const SPAWN_INTERVAL = 5000;
-let lastNovaTime = 0;
-let explosionTimer = 0;
-const explosionDuration = 500;
-let explosionType = "none";
-let deathBurstCount = 0;
-let deathBurstInterval = 300;
-let deathBurstTimer = 0;
-
-let purpleColor, cyanColor, blackColor;
-let tendrils = [];
-let singularity;
-let simulationRunning = true;
-
-// Movement speed for keyboard
-let moveSpeed = 1.95;
-
-// p5 DOM elements
-let container;
-let cnv;
-let controlPanel;
-
-// Rows
-let row1, row2, row3, row4, row5, row6;
-
-// Buttons
-let spawnBtn, huntBtn, burstBtn, novaBtn;
-
-// Numeric inputs
-let agroInput, gravityInput, speedInput, movementInput;
-
-// Meters
-let novaMeter, novaCooldownMeter, huntMeter, abyssMeter;
-
-// D-Pad references
-let dPadUp, dPadDown, dPadLeft, dPadRight;
-let dPadDirection; // p5.Vector for D-Pad direction
-
-// Touch variables
-let dPadActive = false;
-let touchStartX = 0;
-let touchStartY = 0;
-
-// --------------- Setup ---------------
-function setup() {
-  // Container
-  container = createDiv();
-  container.style("display", "flex");
-  container.style("flex-direction", "column");
-  container.style("align-items", "center");
-  container.style("margin", "0 auto");
-  container.style("padding", "0");
-  container.style("background-color", "#000");
-  container.style("width", "100%");
-  container.style("max-width", "100%");
-
-  // Canvas
-  cnv = createCanvas(1200, 900);
-  cnv.parent(container);
-
-  // Define colors
-  purpleColor = color(130, 0, 130);
-  cyanColor = color(0, 255, 255);
-  blackColor = color(0, 0, 0);
-
-  // Optional meter styling
-  createElement('style', `
-    meter.nova::-webkit-meter-optimum-value { background: #008B8B; }
-    meter.nova::-webkit-meter-suboptimum-value { background: #008B8B; }
-    meter.nova::-moz-meter-bar { background: #008B8B; }
-
-    meter.abyss::-webkit-meter-optimum-value { background: #9C89B8; }
-    meter.abyss::-webkit-meter-suboptimum-value { background: #9C89B8; }
-    meter.abyss::-moz-meter-bar { background: #9C89B8; }
-
-    meter.hunt::-webkit-meter-optimum-value { background: #7D6E93; }
-    meter.hunt::-webkit-meter-suboptimum-value { background: #7D6E93; }
-    meter.hunt::-moz-meter-bar { background: #7D6E93; }
-
-    meter.novacooldown::-webkit-meter-optimum-value { background: #555555; }
-    meter.novacooldown::-webkit-meter-suboptimum-value { background: #555555; }
-    meter.novacooldown::-moz-meter-bar { background: #555555; }
-  `).parent(document.head);
-
-  // Control Panel (HUD)
-  controlPanel = createDiv();
-  controlPanel.parent(container);
-  controlPanel.style("background", "black");
-  controlPanel.style("color", "grey");
-  controlPanel.style("text-align", "center");
-  controlPanel.style("padding", "10px 0");
-  controlPanel.style("width", "100%");
-  controlPanel.style("max-width", "1200px");
-  controlPanel.style("font-family", "sans-serif");
-
-  // Row 1: Buttons
-  row1 = createDiv();
-  row1.parent(controlPanel);
-  row1.style("display", "flex");
-  row1.style("justify-content", "center");
-  row1.style("align-items", "center");
-  row1.style("gap", "10px");
-  row1.style("margin-bottom", "10px");
-
-  spawnBtn = createButton("Spawn");
-  spawnBtn.parent(row1);
-  spawnBtn.mousePressed(() => spawnTendrils(5));
-
-  huntBtn = createButton("Hunt");
-  huntBtn.parent(row1);
-  huntBtn.mousePressed(triggerHunt);
-
-  burstBtn = createButton("Burst");
-  burstBtn.parent(row1);
-  burstBtn.mousePressed(triggerRepel);
-
-  novaBtn = createButton("Nova");
-  novaBtn.parent(row1);
-  novaBtn.mousePressed(() => {
-    if (novaCooldown <= 0) {
-      triggerNovaManual();
-      novaCooldown = NOVA_COOLDOWN_TIME;
-    }
-  });
-
-  [spawnBtn, huntBtn, burstBtn, novaBtn].forEach(btn => {
-    btn.style("font-size", "18px");
-    btn.style("background-color", "#202325");
-    btn.style("color", "#9C89B8");
-    btn.style("padding", "5px 10px");
-  });
-  burstBtn.style("color", "#00FFFF");
-  novaBtn.style("color", "#00FFFF");
-
-  // Row 2: Numeric Inputs (Agro, Gravity, Speed, Movement)
-  row2 = createDiv();
-  row2.parent(controlPanel);
-  row2.style("display", "flex");
-  row2.style("justify-content", "center");
-  row2.style("align-items", "center");
-  row2.style("gap", "20px");
-  row2.style("margin-bottom", "5px");
-
-  agroInput = createInput('1.7', 'number');
-  agroInput.parent(row2);
-  agroInput.style("font-size", "18px");
-  agroInput.style("width", "60px");
-  agroInput.style("text-align", "center");
-
-  gravityInput = createInput('1.5', 'number');
-  gravityInput.parent(row2);
-  gravityInput.style("font-size", "18px");
-  gravityInput.style("width", "60px");
-  gravityInput.style("text-align", "center");
-
-  speedInput = createInput('1.95', 'number'); // Keyboard
-  speedInput.parent(row2);
-  speedInput.style("font-size", "18px");
-  speedInput.style("width", "60px");
-  speedInput.style("text-align", "center");
-
-  movementInput = createInput('1.0', 'number'); // Touch
-  movementInput.parent(row2);
-  movementInput.style("font-size", "18px");
-  movementInput.style("width", "60px");
-  movementInput.style("text-align", "center");
-
-  // Row 3: Labels
-  row3 = createDiv();
-  row3.parent(controlPanel);
-  row3.style("display", "flex");
-  row3.style("justify-content", "center");
-  row3.style("align-items", "center");
-  row3.style("gap", "60px");
-  row3.style("margin-bottom", "10px");
-
-  let agroLabel = createSpan("Agro");
-  agroLabel.parent(row3);
-  agroLabel.style("font-size", "14px");
-  agroLabel.style("color", "#CCCCCC");
-
-  let gravLabel = createSpan("Gravity");
-  gravLabel.parent(row3);
-  gravLabel.style("font-size", "14px");
-  gravLabel.style("color", "#CCCCCC");
-
-  let spdLabel = createSpan("Speed");
-  spdLabel.parent(row3);
-  spdLabel.style("font-size", "14px");
-  spdLabel.style("color", "#CCCCCC");
-
-  let moveLabel = createSpan("Movement");
-  moveLabel.parent(row3);
-  moveLabel.style("font-size", "14px");
-  moveLabel.style("color", "#CCCCCC");
-
-  // Row 4: Nova & NovaCooldown Meters
-  row4 = createDiv();
-  row4.parent(controlPanel);
-  row4.style("display", "flex");
-  row4.style("justify-content", "center");
-  row4.style("align-items", "center");
-  row4.style("gap", "20px");
-  row4.style("margin-bottom", "5px");
-
-  novaMeter = createElement('meter');
-  novaMeter.parent(row4);
-  novaMeter.attribute("min", "0");
-  novaMeter.attribute("max", NOVA_THRESHOLD.toString());
-  novaMeter.attribute("value", "0");
-  novaMeter.addClass("nova");
-  novaMeter.style("width", "200px");
-  novaMeter.style("height", "20px");
-
-  novaCooldownMeter = createElement('meter');
-  novaCooldownMeter.parent(row4);
-  novaCooldownMeter.attribute("min", "0");
-  novaCooldownMeter.attribute("max", NOVA_COOLDOWN_TIME.toString());
-  novaCooldownMeter.attribute("value", "0");
-  novaCooldownMeter.addClass("novacooldown");
-  novaCooldownMeter.style("width", "200px");
-  novaCooldownMeter.style("height", "20px");
-
-  // Row 5: Hunt & Abyss Meters
-  row5 = createDiv();
-  row5.parent(controlPanel);
-  row5.style("display", "flex");
-  row5.style("justify-content", "center");
-  row5.style("align-items", "center");
-  row5.style("gap", "20px");
-  row5.style("margin-bottom", "10px");
-
-  huntMeter = createElement('meter');
-  huntMeter.parent(row5);
-  huntMeter.attribute("min", "0");
-  huntMeter.attribute("max", HUNT_THRESHOLD.toString());
-  huntMeter.attribute("value", "0");
-  huntMeter.addClass("hunt");
-  huntMeter.style("width", "200px");
-  huntMeter.style("height", "20px");
-
-  abyssMeter = createElement('meter');
-  abyssMeter.parent(row5);
-  abyssMeter.attribute("min", "0");
-  abyssMeter.attribute("max", ABSYSS_THRESHOLD.toString());
-  abyssMeter.attribute("value", "0");
-  abyssMeter.addClass("abyss");
-  abyssMeter.style("width", "200px");
-  abyssMeter.style("height", "20px");
-
-  // Row 6: D-Pad
-  row6 = createDiv();
-  row6.parent(controlPanel);
-  row6.style("display", "flex");
-  row6.style("flex-direction", "column");
-  row6.style("align-items", "center");
-  row6.style("gap", "5px");
-  row6.style("margin-bottom", "10px");
-
-  // Up
-  let dPadRow1 = createDiv();
-  dPadRow1.parent(row6);
-  dPadRow1.style("display", "flex");
-  dPadRow1.style("justify-content", "center");
-  dPadUp = createButton("↑");
-  dPadUp.parent(dPadRow1);
-  dPadUp.style("font-size", "18px");
-  dPadUp.style("padding", "5px 10px");
-  dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
-  dPadUp.mouseReleased(() => { dPadDirection.y = 0; });
-
-  // Left & Right
-  let dPadRow2 = createDiv();
-  dPadRow2.parent(row6);
-  dPadRow2.style("display", "flex");
-  dPadRow2.style("justify-content", "space-between");
-  dPadRow2.style("width", "100px");
-  dPadLeft = createButton("←");
-  dPadLeft.parent(dPadRow2);
-  dPadLeft.style("font-size", "18px");
-  dPadLeft.style("padding", "5px 10px");
-  dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
-  dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
-
-  dPadRight = createButton("→");
-  dPadRight.parent(dPadRow2);
-  dPadRight.style("font-size", "18px");
-  dPadRight.style("padding", "5px 10px");
-  dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
-  dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
-
-  // Down
-  let dPadRow3 = createDiv();
-  dPadRow3.parent(row6);
-  dPadRow3.style("display", "flex");
-  dPadRow3.style("justify-content", "center");
-  dPadDown = createButton("↓");
-  dPadDown.parent(dPadRow3);
-  dPadDown.style("font-size", "18px");
-  dPadDown.style("padding", "5px 10px");
-  dPadDown.mousePressed(() => { dPadDirection.set(dPadDirection.x, 1); });
-  dPadDown.mouseReleased(() => { dPadDirection.y = 0; });
-
-  dPadDirection = createVector(0, 0);
-
-  // Start simulation
-  resetSimulation();
-}
-
-// --------------- resetSimulation ---------------
-function resetSimulation() {
-  simulationRunning = true;
-  explosionTimer = 0;
-  spawnTimer = 0;
-  lastNovaTime = 0;
-  abyssAccumulator = 0;
-  novaTimer = 0;
-  huntTimer = 0;
-  novaCooldown = 0;
-
-  tendrils = [];
-  singularity = new Singularity(width / 2, height / 2);
-
-  for (let i = 0; i < TENDRIL_COUNT; i++) {
-    let t = new Tendril();
-    t.autoHunt(singularity.pos);
-    tendrils.push(t);
-  }
-}
-
-// --------------- draw ---------------
-function draw() {
-  background(0);
-  handleKeyboard();
-
-  // D-Pad movement (touch uses "Movement" input)
-  if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
-    let touchSpeed = parseFloat(movementInput.value());
-    singularity.pos.x += dPadDirection.x * touchSpeed;
-    singularity.pos.y += dPadDirection.y * touchSpeed;
-  }
-
-  let simSpeed = parseFloat(agroInput.value()); // Affects tendril movement
-  let gravPull = parseFloat(gravityInput.value());
-
-  spawnTimer += deltaTime;
-  if (spawnTimer > SPAWN_INTERVAL) {
-    spawnTendrils(10);
-    spawnTimer = 0;
-  }
-
-  huntTimer += deltaTime;
-  if (huntTimer >= HUNT_THRESHOLD) {
-    triggerHunt();
-    huntTimer = 0;
-  }
-  huntMeter.attribute("value", huntTimer.toString());
-
-  novaTimer += deltaTime;
-  if (novaTimer >= NOVA_THRESHOLD) {
-    triggerNovaBurst();
-    novaTimer = 0;
-  }
-  novaMeter.attribute("value", novaTimer.toString());
-
-  if (novaCooldown > 0) {
-    novaCooldown -= deltaTime;
-    if (novaCooldown < 0) {
-      novaCooldown = 0;
-    }
-  }
-  novaCooldownMeter.attribute("value", novaCooldown.toString());
-
-  singularity.update();
-  singularity.show();
-
-  for (let t of tendrils) {
-    let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE) {
-      t.orbit(singularity.pos, gravPull);
-    }
-    t.update();
-    t.show();
-  }
-
-  let countOrbit = 0;
-  for (let t of tendrils) {
-    let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE) {
-      countOrbit++;
-    }
-  }
-
-  // Abyss assimilation
-  if (countOrbit >= 3 && singularity.state === "healthy") {
-    abyssAccumulator += deltaTime;
-  } else {
-    abyssAccumulator = 0;
-  }
-  if (abyssAccumulator >= ABSYSS_THRESHOLD && singularity.state === "healthy") {
-    singularity.state = "assimilating";
-    singularity.assimilationTimer = 0;
-    abyssAccumulator = 0;
-    explosionType = "death";
-    explosionTimer = 500;
-    deathBurstCount = 5;
-    deathBurstTimer = 0;
-  }
-  abyssMeter.attribute("value", abyssAccumulator.toString());
-
-  if ((singularity.state === "assimilating" || singularity.state === "dead") && deathBurstCount > 0) {
-    deathBurstTimer += deltaTime;
-    if (deathBurstTimer >= deathBurstInterval) {
-      explosionType = "death";
-      explosionTimer = 500;
-      deathBurstTimer = 0;
-      deathBurstCount--;
-    }
-  }
-
-  tendrils = tendrils.filter(t => !t.dead);
-
-  // Explosion effect
-  if (explosionTimer > 0) {
-    drawExplosion();
-    explosionTimer -= deltaTime;
-  }
-}
-
-// --------------- Touch Input ---------------
-function touchStarted() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    // If user tapped outside canvas, do nothing
-    if (t.x < 0 || t.x > width || t.y < 0 || t.y > height) {
-      return false;
-    }
-    // If x < 30% → D-Pad
-    if (t.x < width * 0.3) {
-      dPadActive = true;
-    } else {
-      touchStartX = t.x;
-      touchStartY = t.y;
-    }
-  }
-  return false;
-}
-
-function touchMoved() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    // If outside canvas, ignore
-    if (t.x < 0 || t.x > width || t.y < 0 || t.y > height) {
-      return false;
-    }
-    if (dPadActive) {
-      // Just move by difference from an assumed center
-      let dx = t.x - 80;
-      let dy = t.y - 820;
-      let factor = parseFloat(movementInput.value());
-      singularity.pos.x += dx * factor;
-      singularity.pos.y += dy * factor;
-    } else {
-      let dx = t.x - touchStartX;
-      let dy = t.y - touchStartY;
-      let factor = parseFloat(movementInput.value());
-      singularity.pos.x += dx * factor;
-      singularity.pos.y += dy * factor;
-      touchStartX = t.x;
-      touchStartY = t.y;
-    }
-  }
-  return false;
-}
-
-function touchEnded() {
-  dPadActive = false;
-  return false;
-}
-
-// --------------- Explosion ---------------
-function drawExplosion() {
-  push();
-  translate(singularity.pos.x, singularity.pos.y);
-  let steps = 5;
-  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
-
-  if (explosionType === "nova") {
-    stroke(0,255,255, alphaVal);
-  } else if (explosionType === "burst") {
-    stroke(255,215,0, alphaVal);
-  } else if (explosionType === "death") {
-    stroke(255,0,255, alphaVal);
-  } else {
-    stroke(255,215,0, alphaVal);
-  }
-
-  noFill();
-  for (let i = 0; i < 20; i++) {
-    push();
-    rotate(random(TWO_PI));
-    beginShape();
-    let len = random(20, 50);
-    vertex(0, 0);
-    for (let j = 0; j < steps; j++) {
-      let angle = random(-Math.PI/4, Math.PI/4);
-      let x = cos(angle) * len;
-      let y = sin(angle) * len;
-      vertex(x, y);
-    }
-    endShape();
-    pop();
-  }
-  pop();
-}
-
-// --------------- Classes ---------------
 class Singularity {
   constructor(x, y) {
     this.pos = createVector(x, y);
@@ -636,7 +109,7 @@ class Tendril {
   }
 
   hunt(targetPos) {
-    this.boostTimer = 30;
+    this.boostTimer = 30; // short hunt boost
   }
 
   orbit(targetPos, pullStrength) {
@@ -658,13 +131,14 @@ class Tendril {
 
   update() {
     if (!simulationRunning) return;
+
     if (this.immolating) {
       this.immolateTimer += deltaTime;
       if (this.immolateTimer > this.immolateDuration) {
         this.dead = true;
       }
     } else {
-      let simSpeed = parseFloat(agroInput.value());
+      let simSpeed = parseFloat(agroInput.value()); // "Agro" input
       let d = p5.Vector.dist(this.pos, singularity.pos);
       if (d > ORBIT_DISTANCE) {
         let baseForce = p5.Vector.sub(singularity.pos, this.pos);
@@ -682,6 +156,8 @@ class Tendril {
       this.pos.add(this.vel);
       this.acc.mult(0);
     }
+
+    // Tail
     this.tail.push(this.pos.copy());
     if (this.tail.length > this.tailMax) {
       this.tail.shift();
@@ -692,6 +168,7 @@ class Tendril {
     noStroke();
     let drawColor;
     if (this.immolating) {
+      // fade from purple->cyan->black
       if (this.immolateTimer < this.immolateDuration / 2) {
         let amt = this.immolateTimer / (this.immolateDuration / 2);
         drawColor = lerpColor(purpleColor, cyanColor, amt);
@@ -716,4 +193,571 @@ class Tendril {
     }
     endShape();
   }
+}
+
+// -------------------------------------------------------------------
+// 2) Global Constants & Variables (No references to Singularity here)
+// -------------------------------------------------------------------
+const TENDRIL_COUNT = 20;
+const ORBIT_DISTANCE = 50;
+const NOVA_THRESHOLD = 3500;
+const ABSYSS_THRESHOLD = 13000;
+const HUNT_THRESHOLD = 5000;
+const NOVA_COOLDOWN_TIME = 10000;
+
+let novaTimer = 0;
+let huntTimer = 0;
+let abyssAccumulator = 0;
+let novaCooldown = 0;
+
+let spawnTimer = 0;
+const SPAWN_INTERVAL = 5000;
+let lastNovaTime = 0;
+let explosionTimer = 0;
+const explosionDuration = 500;
+let explosionType = "none";
+
+let deathBurstCount = 0;
+let deathBurstInterval = 300;
+let deathBurstTimer = 0;
+
+let purpleColor, cyanColor, blackColor;
+let tendrils = [];
+let singularity;
+let simulationRunning = true;
+
+// -------------------------------------------------------------------
+// 3) p5 Setup & Draw
+// -------------------------------------------------------------------
+function setup() {
+  createMainContainerAndCanvas(); // see function below
+  createHUD();                    // sets up rows & inputs
+  resetSimulation();
+}
+
+function draw() {
+  background(0);
+  handleKeyboard();
+
+  // D-Pad movement
+  if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
+    let touchSpeed = parseFloat(movementInput.value());
+    singularity.pos.x += dPadDirection.x * touchSpeed;
+    singularity.pos.y += dPadDirection.y * touchSpeed;
+  }
+
+  let simSpeed = parseFloat(agroInput.value());
+  let gravPull = parseFloat(gravityInput.value());
+
+  spawnTimer += deltaTime;
+  if (spawnTimer > SPAWN_INTERVAL) {
+    spawnTendrils(10);
+    spawnTimer = 0;
+  }
+
+  huntTimer += deltaTime;
+  if (huntTimer >= HUNT_THRESHOLD) {
+    triggerHunt();
+    huntTimer = 0;
+  }
+  huntMeter.attribute("value", huntTimer.toString());
+
+  novaTimer += deltaTime;
+  if (novaTimer >= NOVA_THRESHOLD) {
+    triggerNovaBurst();
+    novaTimer = 0;
+  }
+  novaMeter.attribute("value", novaTimer.toString());
+
+  if (novaCooldown > 0) {
+    novaCooldown -= deltaTime;
+    if (novaCooldown < 0) novaCooldown = 0;
+  }
+  novaCooldownMeter.attribute("value", novaCooldown.toString());
+
+  singularity.update();
+  singularity.show();
+
+  // Tendrils
+  for (let t of tendrils) {
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d < ORBIT_DISTANCE) t.orbit(singularity.pos, gravPull);
+    t.update();
+    t.show();
+  }
+
+  // Count how many are in orbit
+  let countOrbit = 0;
+  for (let t of tendrils) {
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d < ORBIT_DISTANCE) countOrbit++;
+  }
+
+  // Abyss assimilation
+  if (countOrbit >= 3 && singularity.state === "healthy") {
+    abyssAccumulator += deltaTime;
+  } else {
+    abyssAccumulator = 0;
+  }
+  if (abyssAccumulator >= ABSYSS_THRESHOLD && singularity.state === "healthy") {
+    singularity.state = "assimilating";
+    singularity.assimilationTimer = 0;
+    abyssAccumulator = 0;
+    explosionType = "death";
+    explosionTimer = explosionDuration;
+    deathBurstCount = 5;
+    deathBurstTimer = 0;
+  }
+  abyssMeter.attribute("value", abyssAccumulator.toString());
+
+  // Death burst chain
+  if ((singularity.state === "assimilating" || singularity.state === "dead") && deathBurstCount > 0) {
+    deathBurstTimer += deltaTime;
+    if (deathBurstTimer >= deathBurstInterval) {
+      explosionType = "death";
+      explosionTimer = explosionDuration;
+      deathBurstTimer = 0;
+      deathBurstCount--;
+    }
+  }
+
+  tendrils = tendrils.filter(t => !t.dead);
+
+  // Explosion effect
+  if (explosionTimer > 0) {
+    drawExplosion();
+    explosionTimer -= deltaTime;
+  }
+}
+
+// -------------------------------------------------------------------
+// 4) Setup Helpers
+// -------------------------------------------------------------------
+function createMainContainerAndCanvas() {
+  container = createDiv();
+  container.style("display", "flex");
+  container.style("flex-direction", "column");
+  container.style("align-items", "center");
+  container.style("margin", "0 auto");
+  container.style("padding", "0");
+  container.style("background-color", "#000");
+  container.style("width", "100%");
+  container.style("max-width", "100%");
+
+  cnv = createCanvas(1200, 900);
+  cnv.parent(container);
+}
+
+function createHUD() {
+  controlPanel = createDiv();
+  controlPanel.parent(container);
+  controlPanel.style("background", "black");
+  controlPanel.style("color", "grey");
+  controlPanel.style("text-align", "center");
+  controlPanel.style("padding", "10px 0");
+  controlPanel.style("width", "100%");
+  controlPanel.style("max-width", "1200px");
+  controlPanel.style("font-family", "sans-serif");
+
+  createRow1_Buttons();
+  createRow2_Inputs();
+  createRow3_Labels();
+  createRow4_NovaMeters();
+  createRow5_HuntAbyss();
+  createRow6_DPad();
+}
+
+function createRow1_Buttons() {
+  let row = createDiv();
+  row.parent(controlPanel);
+  row.style("display", "flex");
+  row.style("justify-content", "center");
+  row.style("align-items", "center");
+  row.style("gap", "10px");
+  row.style("margin-bottom", "10px");
+
+  spawnBtn = createButton("Spawn");
+  spawnBtn.parent(row);
+  spawnBtn.mousePressed(() => spawnTendrils(5));
+
+  huntBtn = createButton("Hunt");
+  huntBtn.parent(row);
+  huntBtn.mousePressed(triggerHunt);
+
+  burstBtn = createButton("Burst");
+  burstBtn.parent(row);
+  burstBtn.mousePressed(triggerRepel);
+
+  novaBtn = createButton("Nova");
+  novaBtn.parent(row);
+  novaBtn.mousePressed(() => {
+    if (novaCooldown <= 0) {
+      triggerNovaManual();
+      novaCooldown = NOVA_COOLDOWN_TIME;
+    }
+  });
+
+  [spawnBtn, huntBtn, burstBtn, novaBtn].forEach(btn => {
+    btn.style("font-size", "18px");
+    btn.style("background-color", "#202325");
+    btn.style("color", "#9C89B8");
+    btn.style("padding", "5px 10px");
+  });
+  burstBtn.style("color", "#00FFFF");
+  novaBtn.style("color", "#00FFFF");
+}
+
+function createRow2_Inputs() {
+  let row = createDiv();
+  row.parent(controlPanel);
+  row.style("display", "flex");
+  row.style("justify-content", "center");
+  row.style("align-items", "center");
+  row.style("gap", "20px");
+  row.style("margin-bottom", "5px");
+
+  agroInput = createInput('1.7', 'number');
+  agroInput.parent(row);
+  agroInput.style("font-size", "18px");
+  agroInput.style("width", "60px");
+  agroInput.style("text-align", "center");
+
+  gravityInput = createInput('1.5', 'number');
+  gravityInput.parent(row);
+  gravityInput.style("font-size", "18px");
+  gravityInput.style("width", "60px");
+  gravityInput.style("text-align", "center");
+
+  speedInput = createInput('1.95', 'number');
+  speedInput.parent(row);
+  speedInput.style("font-size", "18px");
+  speedInput.style("width", "60px");
+  speedInput.style("text-align", "center");
+
+  movementInput = createInput('1.0', 'number');
+  movementInput.parent(row);
+  movementInput.style("font-size", "18px");
+  movementInput.style("width", "60px");
+  movementInput.style("text-align", "center");
+}
+
+function createRow3_Labels() {
+  let row = createDiv();
+  row.parent(controlPanel);
+  row.style("display", "flex");
+  row.style("justify-content", "center");
+  row.style("align-items", "center");
+  row.style("gap", "60px");
+  row.style("margin-bottom", "10px");
+
+  let agroLabel = createSpan("Agro");
+  agroLabel.parent(row);
+  agroLabel.style("font-size", "14px");
+  agroLabel.style("color", "#CCCCCC");
+
+  let gravLabel = createSpan("Gravity");
+  gravLabel.parent(row);
+  gravLabel.style("font-size", "14px");
+  gravLabel.style("color", "#CCCCCC");
+
+  let spdLabel = createSpan("Speed");
+  spdLabel.parent(row);
+  spdLabel.style("font-size", "14px");
+  spdLabel.style("color", "#CCCCCC");
+
+  let moveLabel = createSpan("Movement");
+  moveLabel.parent(row);
+  moveLabel.style("font-size", "14px");
+  moveLabel.style("color", "#CCCCCC");
+}
+
+function createRow4_NovaMeters() {
+  let row = createDiv();
+  row.parent(controlPanel);
+  row.style("display", "flex");
+  row.style("justify-content", "center");
+  row.style("align-items", "center");
+  row.style("gap", "20px");
+  row.style("margin-bottom", "5px");
+
+  novaMeter = createElement('meter');
+  novaMeter.parent(row);
+  novaMeter.attribute("min", "0");
+  novaMeter.attribute("max", NOVA_THRESHOLD.toString());
+  novaMeter.attribute("value", "0");
+  novaMeter.addClass("nova");
+  novaMeter.style("width", "200px");
+  novaMeter.style("height", "20px");
+
+  novaCooldownMeter = createElement('meter');
+  novaCooldownMeter.parent(row);
+  novaCooldownMeter.attribute("min", "0");
+  novaCooldownMeter.attribute("max", NOVA_COOLDOWN_TIME.toString());
+  novaCooldownMeter.attribute("value", "0");
+  novaCooldownMeter.addClass("novacooldown");
+  novaCooldownMeter.style("width", "200px");
+  novaCooldownMeter.style("height", "20px");
+}
+
+function createRow5_HuntAbyss() {
+  let row = createDiv();
+  row.parent(controlPanel);
+  row.style("display", "flex");
+  row.style("justify-content", "center");
+  row.style("align-items", "center");
+  row.style("gap", "20px");
+  row.style("margin-bottom", "10px");
+
+  huntMeter = createElement('meter');
+  huntMeter.parent(row);
+  huntMeter.attribute("min", "0");
+  huntMeter.attribute("max", HUNT_THRESHOLD.toString());
+  huntMeter.attribute("value", "0");
+  huntMeter.addClass("hunt");
+  huntMeter.style("width", "200px");
+  huntMeter.style("height", "20px");
+
+  abyssMeter = createElement('meter');
+  abyssMeter.parent(row);
+  abyssMeter.attribute("min", "0");
+  abyssMeter.attribute("max", ABSYSS_THRESHOLD.toString());
+  abyssMeter.attribute("value", "0");
+  abyssMeter.addClass("abyss");
+  abyssMeter.style("width", "200px");
+  abyssMeter.style("height", "20px");
+}
+
+function createRow6_DPad() {
+  let row = createDiv();
+  row.parent(controlPanel);
+  row.style("display", "flex");
+  row.style("flex-direction", "column");
+  row.style("align-items", "center");
+  row.style("gap", "5px");
+  row.style("margin-bottom", "10px");
+
+  // Up
+  let dPadRow1 = createDiv();
+  dPadRow1.parent(row);
+  dPadRow1.style("display", "flex");
+  dPadRow1.style("justify-content", "center");
+  dPadUp = createButton("↑");
+  dPadUp.parent(dPadRow1);
+  dPadUp.style("font-size", "18px");
+  dPadUp.style("padding", "5px 10px");
+  dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
+  dPadUp.mouseReleased(() => { dPadDirection.y = 0; });
+
+  // Left & Right
+  let dPadRow2 = createDiv();
+  dPadRow2.parent(row);
+  dPadRow2.style("display", "flex");
+  dPadRow2.style("justify-content", "space-between");
+  dPadRow2.style("width", "100px");
+
+  dPadLeft = createButton("←");
+  dPadLeft.parent(dPadRow2);
+  dPadLeft.style("font-size", "18px");
+  dPadLeft.style("padding", "5px 10px");
+  dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
+  dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
+
+  dPadRight = createButton("→");
+  dPadRight.parent(dPadRow2);
+  dPadRight.style("font-size", "18px");
+  dPadRight.style("padding", "5px 10px");
+  dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
+  dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
+
+  // Down
+  let dPadRow3 = createDiv();
+  dPadRow3.parent(row);
+  dPadRow3.style("display", "flex");
+  dPadRow3.style("justify-content", "center");
+  dPadDown = createButton("↓");
+  dPadDown.parent(dPadRow3);
+  dPadDown.style("font-size", "18px");
+  dPadDown.style("padding", "5px 10px");
+  dPadDown.mousePressed(() => { dPadDirection.set(dPadDirection.x, 1); });
+  dPadDown.mouseReleased(() => { dPadDirection.y = 0; });
+
+  dPadDirection = createVector(0, 0);
+}
+
+// -------------------------------------------------------------------
+// 5) The rest of the game logic
+// -------------------------------------------------------------------
+
+function resetSimulation() {
+  simulationRunning = true;
+  explosionTimer = 0;
+  spawnTimer = 0;
+  lastNovaTime = 0;
+  abyssAccumulator = 0;
+  novaTimer = 0;
+  huntTimer = 0;
+  novaCooldown = 0;
+
+  tendrils = [];
+  singularity = new Singularity(width / 2, height / 2);
+
+  for (let i = 0; i < TENDRIL_COUNT; i++) {
+    let t = new Tendril();
+    t.autoHunt(singularity.pos);
+    tendrils.push(t);
+  }
+}
+
+function spawnTendrils(n = 1) {
+  let available = 50 - tendrils.length;
+  let toSpawn = min(n, available);
+  for (let i = 0; i < toSpawn; i++) {
+    let t = new Tendril();
+    t.autoHunt(singularity.pos);
+    tendrils.push(t);
+  }
+}
+
+function handleKeyboard() {
+  moveSpeed = parseFloat(speedInput.value());
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= moveSpeed;
+  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += moveSpeed;
+  if (keyIsDown(UP_ARROW) || keyIsDown(87)) singularity.pos.y -= moveSpeed;
+  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) singularity.pos.y += moveSpeed;
+
+  singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
+  singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
+}
+
+function keyReleased() {
+  if (keyCode === 32) triggerRepel();       // SPACE
+  if (keyCode === 86 && novaCooldown <= 0) { // V
+    triggerNovaManual();
+    novaCooldown = NOVA_COOLDOWN_TIME;
+  }
+}
+
+// Buttons
+function triggerHunt() {
+  for (let t of tendrils) t.hunt(singularity.pos);
+}
+
+function triggerRepel() {
+  for (let t of tendrils) {
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d < ORBIT_DISTANCE) {
+      let repulse = p5.Vector.sub(t.pos, singularity.pos);
+      repulse.normalize();
+      repulse.mult(12);
+      t.vel = repulse.copy();
+    }
+  }
+  explosionType = "burst";
+  explosionTimer = explosionDuration;
+}
+
+function triggerNovaManual() {
+  for (let t of tendrils) {
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d < ORBIT_DISTANCE && !t.immolating) t.startImmolation();
+  }
+  explosionType = "nova";
+  explosionTimer = explosionDuration;
+}
+
+function triggerNovaBurst() {
+  let count = 0;
+  for (let t of tendrils) {
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d < ORBIT_DISTANCE && !t.immolating) {
+      t.startImmolation();
+      count++;
+      if (count >= 5) break;
+    }
+  }
+  explosionType = "nova";
+  explosionTimer = explosionDuration;
+  lastNovaTime = millis();
+}
+
+// Touch
+function touchStarted() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    // If outside the canvas, ignore
+    if (t.x < 0 || t.x > width || t.y < 0 || t.y > height) return false;
+    if (t.x < width * 0.3) {
+      dPadActive = true;
+    } else {
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchMoved() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    // If outside the canvas, ignore
+    if (t.x < 0 || t.x > width || t.y < 0 || t.y > height) return false;
+
+    if (dPadActive) {
+      let dx = t.x - 80;
+      let dy = t.y - 820;
+      let factor = parseFloat(movementInput.value());
+      singularity.pos.x += dx * factor;
+      singularity.pos.y += dy * factor;
+    } else {
+      let dx = t.x - touchStartX;
+      let dy = t.y - touchStartY;
+      let factor = parseFloat(movementInput.value());
+      singularity.pos.x += dx * factor;
+      singularity.pos.y += dy * factor;
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchEnded() {
+  dPadActive = false;
+  return false;
+}
+
+// Explosion
+function drawExplosion() {
+  push();
+  translate(singularity.pos.x, singularity.pos.y);
+  let steps = 5;
+  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
+
+  if (explosionType === "nova") {
+    stroke(0,255,255, alphaVal);
+  } else if (explosionType === "burst") {
+    stroke(255,215,0, alphaVal);
+  } else if (explosionType === "death") {
+    stroke(255,0,255, alphaVal);
+  } else {
+    stroke(255,215,0, alphaVal);
+  }
+
+  noFill();
+  for (let i = 0; i < 20; i++) {
+    push();
+    rotate(random(TWO_PI));
+    beginShape();
+    let len = random(20, 50);
+    vertex(0, 0);
+    for (let j = 0; j < steps; j++) {
+      let angle = random(-Math.PI/4, Math.PI/4);
+      let x = cos(angle) * len;
+      let y = sin(angle) * len;
+      vertex(x, y);
+    }
+    endShape();
+    pop();
+  }
+  pop();
 }
