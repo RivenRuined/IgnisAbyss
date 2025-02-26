@@ -1,16 +1,19 @@
 console.log("Ignis.js loaded and running!");
 
-/* 
+/*
   Ignis x Abyss – Life x Death
-  Minimal tested example with D-Pad, numeric inputs, & no leftover references.
+
+  Final version with bounding-rect checks for touch events:
+  - Only process swipe/movement if the touch is within the canvas region.
+  - Leaves HUD inputs & buttons fully clickable on mobile.
 
   HUD Layout:
     Row 1: [Spawn | Hunt | Burst | Nova]
-    Row 2: [Agro Input | Gravity Input | Speed Input | Movement Input]
-    Row 3: [Agro | Gravity | Speed | Movement]
-    Row 4: [Nova Meter | Nova Cooldown Meter]
-    Row 5: [Hunt Meter | Abyss Meter]
-    Row 6: [D-Pad (Up, Left/Right, Down)]
+    Row 2: [Agro, Gravity, Speed, Movement inputs]
+    Row 3: [Agro, Gravity, Speed, Movement labels]
+    Row 4: [Nova Meter, Nova Cooldown Meter]
+    Row 5: [Hunt Meter, Abyss Meter]
+    Row 6: [D-Pad: Up, Left/Right, Down]
 */
 
 // ---------------- Global Constants & Variables ----------------
@@ -49,7 +52,7 @@ let container;
 let cnv;
 let controlPanel;
 
-// Rows for the HUD
+// Rows
 let row1, row2, row3, row4, row5, row6;
 
 // Buttons
@@ -70,9 +73,12 @@ let dPadActive = false;
 let touchStartX = 0;
 let touchStartY = 0;
 
+// We'll store the bounding rect of the canvas:
+let canvasRect;
+
 // ---------------- Setup ----------------
 function setup() {
-  // Container
+  // Main container
   container = createDiv();
   container.style("display", "flex");
   container.style("flex-direction", "column");
@@ -86,6 +92,8 @@ function setup() {
   // Canvas
   cnv = createCanvas(1200, 900);
   cnv.parent(container);
+  // We'll get the bounding rect once the canvas is created
+  // (But do it in draw or after a short delay)
 
   // Colors
   purpleColor = color(130, 0, 130);
@@ -161,7 +169,7 @@ function setup() {
   burstBtn.style("color", "#00FFFF");
   novaBtn.style("color", "#00FFFF");
 
-  // Row 2: Numeric Inputs (Agro, Gravity, Speed, Movement)
+  // Row 2: Numeric Inputs
   row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
@@ -286,7 +294,6 @@ function setup() {
   row6.style("gap", "5px");
   row6.style("margin-bottom", "10px");
 
-  // Up
   let dPadRow1 = createDiv();
   dPadRow1.parent(row6);
   dPadRow1.style("display", "flex");
@@ -298,7 +305,6 @@ function setup() {
   dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
   dPadUp.mouseReleased(() => { dPadDirection.y = 0; });
 
-  // Left & Right
   let dPadRow2 = createDiv();
   dPadRow2.parent(row6);
   dPadRow2.style("display", "flex");
@@ -318,7 +324,6 @@ function setup() {
   dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
   dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
 
-  // Down
   let dPadRow3 = createDiv();
   dPadRow3.parent(row6);
   dPadRow3.style("display", "flex");
@@ -332,7 +337,6 @@ function setup() {
 
   dPadDirection = createVector(0, 0);
 
-  // Start
   resetSimulation();
 }
 
@@ -357,91 +361,16 @@ function resetSimulation() {
   }
 }
 
-// ---------------- Spawning ----------------
-function spawnTendrils(n = 1) {
-  let available = 50 - tendrils.length;
-  let toSpawn = min(n, available);
-  for (let i = 0; i < toSpawn; i++) {
-    let t = new Tendril();
-    t.autoHunt(singularity.pos);
-    tendrils.push(t);
-  }
-}
-
-// ---------------- Keyboard Control ----------------
-function handleKeyboard() {
-  // Speed input for keyboard
-  moveSpeed = parseFloat(speedInput.value());
-  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) { singularity.pos.x -= moveSpeed; }
-  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) { singularity.pos.x += moveSpeed; }
-  if (keyIsDown(UP_ARROW) || keyIsDown(87)) { singularity.pos.y -= moveSpeed; }
-  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) { singularity.pos.y += moveSpeed; }
-
-  singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
-  singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
-}
-
-function keyReleased() {
-  if (keyCode === 32) { triggerRepel(); }
-  if (keyCode === 86 && novaCooldown <= 0) {
-    triggerNovaManual();
-    novaCooldown = NOVA_COOLDOWN_TIME;
-  }
-}
-
-// ---------------- Button Triggers ----------------
-function triggerHunt() {
-  for (let t of tendrils) {
-    t.hunt(singularity.pos);
-  }
-}
-
-function triggerRepel() {
-  for (let t of tendrils) {
-    let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE) {
-      let repulse = p5.Vector.sub(t.pos, singularity.pos);
-      repulse.normalize();
-      repulse.mult(12);
-      t.vel = repulse.copy();
-    }
-  }
-  explosionType = "burst";
-  explosionTimer = 500;
-}
-
-function triggerNovaManual() {
-  for (let t of tendrils) {
-    let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE && !t.immolating) {
-      t.startImmolation();
-    }
-  }
-  explosionType = "nova";
-  explosionTimer = 500;
-}
-
-function triggerNovaBurst() {
-  let count = 0;
-  for (let t of tendrils) {
-    let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE && !t.immolating) {
-      t.startImmolation();
-      count++;
-      if (count >= 5) break;
-    }
-  }
-  explosionType = "nova";
-  explosionTimer = 500;
-  lastNovaTime = millis();
-}
-
 // ---------------- Draw Loop ----------------
 function draw() {
   background(0);
+
+  // Update canvas bounding rect each frame (or do it once in windowResized)
+  canvasRect = cnv.elt.getBoundingClientRect();
+
   handleKeyboard();
 
-  // D-Pad movement (uses "Movement" input)
+  // D-Pad movement (touch uses "Movement")
   if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
     let touchSpeed = parseFloat(movementInput.value());
     singularity.pos.x += dPadDirection.x * touchSpeed;
@@ -473,7 +402,9 @@ function draw() {
 
   if (novaCooldown > 0) {
     novaCooldown -= deltaTime;
-    if (novaCooldown < 0) { novaCooldown = 0; }
+    if (novaCooldown < 0) {
+      novaCooldown = 0;
+    }
   }
   novaCooldownMeter.attribute("value", novaCooldown.toString());
 
@@ -492,10 +423,11 @@ function draw() {
   let countOrbit = 0;
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE) { countOrbit++; }
+    if (d < ORBIT_DISTANCE) {
+      countOrbit++;
+    }
   }
 
-  // Abyss assimilation
   if (countOrbit >= 3 && singularity.state === "healthy") {
     abyssAccumulator += deltaTime;
   } else {
@@ -512,7 +444,6 @@ function draw() {
   }
   abyssMeter.attribute("value", abyssAccumulator.toString());
 
-  // Death burst chain
   if ((singularity.state === "assimilating" || singularity.state === "dead") && deathBurstCount > 0) {
     deathBurstTimer += deltaTime;
     if (deathBurstTimer >= deathBurstInterval) {
@@ -525,17 +456,36 @@ function draw() {
 
   tendrils = tendrils.filter(t => !t.dead);
 
-  // Explosion effect
   if (explosionTimer > 0) {
     drawExplosion();
     explosionTimer -= deltaTime;
   }
 }
 
-// Touch & D-Pad logic
+// ---------------- Touch & D-Pad Controls ----------------
+
+// We'll only process touches if they're inside the canvas bounding rect
+function isTouchInCanvas(touch) {
+  // bounding rect in global scope: canvasRect
+  let x = touch.clientX; 
+  let y = touch.clientY;
+  if (
+    x >= canvasRect.left && x <= canvasRect.right &&
+    y >= canvasRect.top && y <= canvasRect.bottom
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
+    if (!isTouchInCanvas(t)) {
+      // Touch is outside the canvas → do NOT do any game movement logic
+      return false;
+    }
+    // If inside the canvas & x < 30% → D-Pad
     if (t.x < width * 0.3) {
       dPadActive = true;
     } else {
@@ -549,8 +499,14 @@ function touchStarted() {
 function touchMoved() {
   if (touches.length > 0) {
     let t = touches[0];
+    // If the user moved outside the canvas, ignore
+    if (!isTouchInCanvas(t)) {
+      return false;
+    }
+
     if (dPadActive) {
-      let dx = t.x - 80; // Hard-coded D-Pad center
+      // We'll do a simple approach: center is (80, 820) from old code
+      let dx = t.x - 80;
       let dy = t.y - 820;
       let factor = parseFloat(movementInput.value());
       singularity.pos.x += dx * factor;
@@ -573,7 +529,7 @@ function touchEnded() {
   return false;
 }
 
-// Explosion
+// ---------------- Explosion, Singularity, Tendril classes ----------------
 function drawExplosion() {
   push();
   translate(singularity.pos.x, singularity.pos.y);
@@ -609,7 +565,6 @@ function drawExplosion() {
   pop();
 }
 
-// Classes
 class Singularity {
   constructor(x, y) {
     this.pos = createVector(x, y);
@@ -699,7 +654,7 @@ class Tendril {
   }
 
   hunt(targetPos) {
-    this.boostTimer = 30; // short hunt boost
+    this.boostTimer = 30;
   }
 
   orbit(targetPos, pullStrength) {
