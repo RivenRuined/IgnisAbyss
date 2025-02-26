@@ -1,15 +1,23 @@
-console.log("Ignis.js loaded and running!!!");
+console.log("Ignis.js loaded and running!!");
 
 /*
   Ignis x Abyss – Life x Death
-  Updated to fix "cnv.style is not a function" by referencing cnv.elt.style(...).
 
-  1) Auto-screens on load (createCanvas(windowWidth, windowHeight)).
-  2) Resizes on windowResized() → matches new window size (if "Auto" is enabled).
-  3) "PC" (1200×900), "Mobile" (360×640), "Tablet" (768×1024), and "Auto" buttons near D-Pad.
-  4) Walls: tendrils bounce off screen edges (brick-breaker style).
-  5) One slider: "Speed."
-  6) Orbit Slowing: each tendril in orbit reduces final speed. If speed hits 0, singularity is "stuck" until user uses Burst/Nova.
+  Features:
+  1) Auto screen sizing (default).
+  2) Four preset size buttons: PC, Mobile, Tablet, plus an "Auto" revert.
+  3) Walls On/Off toggle: if walls are on, tendrils bounce off edges.
+  4) Single Speed slider (combined from old Speed & Movement).
+  5) Orbit Slowing: if enough tendrils orbit, singularity's speed goes down.
+  6) If speed hits 0 due to orbit, the singularity is "stuck" until a Burst or Nova frees them.
+
+  Layout:
+    Row 1: [Spawn | Hunt | Burst | Nova]
+    Row 2: [Agro Slider | Gravity Slider | Speed Slider]
+    Row 3: [Agro Label | Gravity Label | Speed Label]
+    Row 4: [Nova Meter | Nova Cooldown Meter]
+    Row 5: [Hunt Meter | Abyss Meter]
+    Row 6: [Walls On/Off | D-Pad | PC | Mobile | Auto | Tablet]
 */
 
 // -------------------------------------------------------------------
@@ -134,30 +142,18 @@ class Tendril {
     if (!simulationRunning) return;
 
     if (this.immolating) {
-      // Dying
       this.immolateTimer += deltaTime;
       if (this.immolateTimer > this.immolateDuration) {
         this.dead = true;
       }
     } else {
-      // Movement speed from the single "Speed" slider
-      let simSpeed = speedSlider.value(); 
-      // Brick-breaker style bounce off walls
-      if (this.pos.x < 0) {
-        this.pos.x = 0; 
-        this.vel.x *= -1;
-      } else if (this.pos.x > width) {
-        this.pos.x = width; 
-        this.vel.x *= -1;
+      let simSpeed = agroSlider.value();
+      let d = p5.Vector.dist(this.pos, singularity.pos);
+      if (d > ORBIT_DISTANCE) {
+        let baseForce = p5.Vector.sub(singularity.pos, this.pos);
+        baseForce.setMag(0.05);
+        this.acc.add(baseForce);
       }
-      if (this.pos.y < 0) {
-        this.pos.y = 0; 
-        this.vel.y *= -1;
-      } else if (this.pos.y > height) {
-        this.pos.y = height; 
-        this.vel.y *= -1;
-      }
-
       if (this.boostTimer > 0) {
         let boostForce = p5.Vector.sub(singularity.pos, this.pos);
         boostForce.setMag(0.2);
@@ -168,9 +164,28 @@ class Tendril {
       this.vel.limit(this.maxSpeed * simSpeed);
       this.pos.add(this.vel);
       this.acc.mult(0);
+
+      // If wallsOn is true, bounce off edges
+      if (wallsOn) {
+        if (this.pos.x < 0) {
+          this.pos.x = 0;
+          this.vel.x *= -1;
+        }
+        if (this.pos.x > width) {
+          this.pos.x = width;
+          this.vel.x *= -1;
+        }
+        if (this.pos.y < 0) {
+          this.pos.y = 0;
+          this.vel.y *= -1;
+        }
+        if (this.pos.y > height) {
+          this.pos.y = height;
+          this.vel.y *= -1;
+        }
+      }
     }
 
-    // Tail
     this.tail.push(this.pos.copy());
     if (this.tail.length > this.tailMax) {
       this.tail.shift();
@@ -238,75 +253,71 @@ let tendrils = [];
 let singularity;
 let simulationRunning = true;
 
-let speedSlider; // single "Speed" slider
+// p5 DOM references
+let container, cnv, controlPanel;
 
+// Sliders
+let agroSlider, gravitySlider, speedSlider;
+
+// D-Pad
 let dPadUp, dPadDown, dPadLeft, dPadRight;
 let dPadDirection;
 let dPadActive = false;
 let touchStartX = 0;
 let touchStartY = 0;
 
-let container, cnv, controlPanel;
-let huntMeter, abyssMeter, novaMeter, novaCooldownMeter;
+// Walls
+let wallsOn = false;
 
-let autoResize = true; // if true => auto-resize on windowResized()
-
+// -------------------------------------------------------------------
+// 3) Setup & Draw
+// -------------------------------------------------------------------
 function setup() {
-  // Assign color variables
   purpleColor = color(130, 0, 130);
   cyanColor   = color(0, 255, 255);
   blackColor  = color(0, 0, 0);
 
-  // Create container
-  container = createDiv();
-  container.style("display", "flex");
-  container.style("flex-direction", "column");
-  container.style("align-items", "center");
-  container.style("margin", "0 auto");
-  container.style("padding", "0");
-  container.style("background-color", "#000");
-  container.style("width", "100%");
-  container.style("max-width", "100%");
-  container.parent(document.body);
-
-  // Create auto-sized canvas
-  cnv = createCanvas(windowWidth, windowHeight);
-  cnv.parent(container);
-
-  // Here's the fix: we reference cnv.elt.style, not cnv.style
-  cnv.elt.style.position = "relative";
-  cnv.elt.style.zIndex = "0";
+  // Use auto screen size by default
+  createCanvas(windowWidth, windowHeight);
 
   createHUD();
+
   resetSimulation();
 }
 
 function draw() {
   background(0);
 
-  // Count how many are in orbit
+  handleKeyboard();
+
+  // Count how many tendrils are in orbit
   let countOrbit = 0;
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
     if (d < ORBIT_DISTANCE) countOrbit++;
   }
 
-  // finalSpeed = baseSpeed - orbit slowdown
+  // Orbit slowing: if tendrils are orbiting, reduce speed
+  // "speed" slider sets base speed, but if enough tendrils orbit, speed can go down to 0 => "stuck"
   let baseSpeed = speedSlider.value();
-  let orbitSlow = countOrbit * 0.05;
+  let orbitSlow = countOrbit * 0.2; // each orbiting tendril reduces speed by 0.2
   let finalSpeed = max(0, baseSpeed - orbitSlow);
 
-  // If finalSpeed=0 => "stuck"
-  handleKeyboard(finalSpeed);
-
-  // D-Pad
-  if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
-    if (finalSpeed > 0) {
+  // If finalSpeed is 0, the singularity is "stuck" unless player uses Burst or Nova
+  if (finalSpeed <= 0.001) {
+    // ignore keyboard movement or D-Pad movement
+    // we do nothing here, so the singularity won't move unless there's a burst or nova
+  } else {
+    // apply D-Pad movement
+    if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
       singularity.pos.x += dPadDirection.x * finalSpeed;
       singularity.pos.y += dPadDirection.y * finalSpeed;
     }
+    // The handleKeyboard() call has already adjusted singularity for arrow keys,
+    // but we can also clamp it to finalSpeed. Let's do it in handleKeyboard() too.
   }
 
+  // Timers
   spawnTimer += deltaTime;
   if (spawnTimer > SPAWN_INTERVAL) {
     spawnTendrils(10);
@@ -333,17 +344,21 @@ function draw() {
   }
   novaCooldownMeter.attribute("value", novaCooldown.toString());
 
-  // Singularity
   singularity.update();
   singularity.show();
 
-  // Tendrils
   for (let t of tendrils) {
+    // gravity pull
+    let gravPull = gravitySlider.value();
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d < ORBIT_DISTANCE) {
+      t.orbit(singularity.pos, gravPull);
+    }
     t.update();
     t.show();
   }
 
-  // Assimilation
+  // Assimilation logic
   if (countOrbit >= 3 && singularity.state === "healthy") {
     abyssAccumulator += deltaTime;
   } else {
@@ -354,24 +369,27 @@ function draw() {
     singularity.assimilationTimer = 0;
     abyssAccumulator = 0;
     explosionType = "death";
-    explosionTimer = 500;
+    explosionTimer = explosionDuration;
     deathBurstCount = 5;
     deathBurstTimer = 0;
   }
   abyssMeter.attribute("value", abyssAccumulator.toString());
 
+  // Death burst chain
   if ((singularity.state === "assimilating" || singularity.state === "dead") && deathBurstCount > 0) {
     deathBurstTimer += deltaTime;
     if (deathBurstTimer >= deathBurstInterval) {
       explosionType = "death";
-      explosionTimer = 500;
+      explosionTimer = explosionDuration;
       deathBurstTimer = 0;
       deathBurstCount--;
     }
   }
 
+  // remove dead tendrils
   tendrils = tendrils.filter(t => !t.dead);
 
+  // Explosion effect
   if (explosionTimer > 0) {
     drawExplosion();
     explosionTimer -= deltaTime;
@@ -379,24 +397,32 @@ function draw() {
 }
 
 function windowResized() {
-  if (autoResize) {
+  // if "Auto" is chosen, we do this
+  if (autoMode) {
     resizeCanvas(windowWidth, windowHeight);
+    resetSimulation();
   }
 }
 
+// -------------------------------------------------------------------
+// 4) HUD
+// -------------------------------------------------------------------
+let autoMode = true; // if true, we auto-resize
+
 function createHUD() {
+  // We'll create an absolute container on top
   controlPanel = createDiv();
-  controlPanel.parent(container);
+  controlPanel.style("position", "absolute");
+  controlPanel.style("top", "0");
+  controlPanel.style("left", "0");
+  controlPanel.style("width", "100%");
   controlPanel.style("background", "black");
   controlPanel.style("color", "grey");
   controlPanel.style("text-align", "center");
   controlPanel.style("padding", "10px 0");
-  controlPanel.style("width", "100%");
-  controlPanel.style("max-width", "1200px");
   controlPanel.style("font-family", "sans-serif");
-  controlPanel.style("position", "relative");
   controlPanel.style("z-index", "9999");
-  controlPanel.style("pointer-events", "auto");
+  controlPanel.parent(document.body);
 
   // Row 1: Buttons
   let row1 = createDiv();
@@ -433,13 +459,11 @@ function createHUD() {
     btn.style("background-color", "#202325");
     btn.style("color", "#9C89B8");
     btn.style("padding", "5px 10px");
-    btn.style("pointer-events", "auto");
-    btn.style("z-index", "9999");
   });
   burstBtn.style("color", "#00FFFF");
   novaBtn.style("color", "#00FFFF");
 
-  // Row 2: Speed Slider
+  // Row 2: Sliders
   let row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
@@ -448,186 +472,192 @@ function createHUD() {
   row2.style("gap", "20px");
   row2.style("margin-bottom", "5px");
 
+  agroSlider = createSlider(0, 5, 1.7, 0.1);
+  agroSlider.parent(row2);
+  agroSlider.style("width", "120px");
+
+  gravitySlider = createSlider(0, 5, 1.5, 0.1);
+  gravitySlider.parent(row2);
+  gravitySlider.style("width", "120px");
+
   speedSlider = createSlider(0, 5, 1.95, 0.1);
   speedSlider.parent(row2);
-  speedSlider.style("width", "200px");
-  speedSlider.style("z-index", "9999");
+  speedSlider.style("width", "120px");
 
-  let spdLabel = createSpan("Speed");
-  spdLabel.parent(row2);
-  spdLabel.style("font-size", "14px");
-  spdLabel.style("color", "#CCCCCC");
-
-  // Row 3: Nova & NovaCooldown
+  // Row 3: Labels
   let row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
   row3.style("justify-content", "center");
   row3.style("align-items", "center");
-  row3.style("gap", "20px");
-  row3.style("margin-bottom", "5px");
+  row3.style("gap", "60px");
+  row3.style("margin-bottom", "10px");
 
-  novaMeter = createElement('meter');
-  novaMeter.parent(row3);
-  novaMeter.attribute("min", "0");
-  novaMeter.attribute("max", NOVA_THRESHOLD.toString());
-  novaMeter.attribute("value", "0");
-  novaMeter.addClass("nova");
-  novaMeter.style("width", "200px");
-  novaMeter.style("height", "20px");
-  novaMeter.style("z-index", "9999");
+  let agroLabel = createSpan("Agro");
+  agroLabel.parent(row3);
+  agroLabel.style("font-size", "14px");
+  agroLabel.style("color", "#CCCCCC");
 
-  novaCooldownMeter = createElement('meter');
-  novaCooldownMeter.parent(row3);
-  novaCooldownMeter.attribute("min", "0");
-  novaCooldownMeter.attribute("max", NOVA_COOLDOWN_TIME.toString());
-  novaCooldownMeter.attribute("value", "0");
-  novaCooldownMeter.addClass("novacooldown");
-  novaCooldownMeter.style("width", "200px");
-  novaCooldownMeter.style("height", "20px");
-  novaCooldownMeter.style("z-index", "9999");
+  let gravLabel = createSpan("Gravity");
+  gravLabel.parent(row3);
+  gravLabel.style("font-size", "14px");
+  gravLabel.style("color", "#CCCCCC");
 
-  // Row 4: Hunt & Abyss
+  let spdLabel = createSpan("Speed");
+  spdLabel.parent(row3);
+  spdLabel.style("font-size", "14px");
+  spdLabel.style("color", "#CCCCCC");
+
+  // Row 4: Nova & NovaCooldown
   let row4 = createDiv();
   row4.parent(controlPanel);
   row4.style("display", "flex");
   row4.style("justify-content", "center");
   row4.style("align-items", "center");
   row4.style("gap", "20px");
-  row4.style("margin-bottom", "10px");
+  row4.style("margin-bottom", "5px");
+
+  novaMeter = createElement('meter');
+  novaMeter.parent(row4);
+  novaMeter.attribute("min", "0");
+  novaMeter.attribute("max", NOVA_THRESHOLD.toString());
+  novaMeter.attribute("value", "0");
+  novaMeter.addClass("nova");
+  novaMeter.style("width", "200px");
+  novaMeter.style("height", "20px");
+
+  novaCooldownMeter = createElement('meter');
+  novaCooldownMeter.parent(row4);
+  novaCooldownMeter.attribute("min", "0");
+  novaCooldownMeter.attribute("max", NOVA_COOLDOWN_TIME.toString());
+  novaCooldownMeter.attribute("value", "0");
+  novaCooldownMeter.addClass("novacooldown");
+  novaCooldownMeter.style("width", "200px");
+  novaCooldownMeter.style("height", "20px");
+
+  // Row 5: Hunt & Abyss
+  let row5 = createDiv();
+  row5.parent(controlPanel);
+  row5.style("display", "flex");
+  row5.style("justify-content", "center");
+  row5.style("align-items", "center");
+  row5.style("gap", "20px");
+  row5.style("margin-bottom", "10px");
 
   huntMeter = createElement('meter');
-  huntMeter.parent(row4);
+  huntMeter.parent(row5);
   huntMeter.attribute("min", "0");
   huntMeter.attribute("max", HUNT_THRESHOLD.toString());
   huntMeter.attribute("value", "0");
   huntMeter.addClass("hunt");
   huntMeter.style("width", "200px");
   huntMeter.style("height", "20px");
-  huntMeter.style("z-index", "9999");
 
   abyssMeter = createElement('meter');
-  abyssMeter.parent(row4);
+  abyssMeter.parent(row5);
   abyssMeter.attribute("min", "0");
   abyssMeter.attribute("max", ABSYSS_THRESHOLD.toString());
   abyssMeter.attribute("value", "0");
   abyssMeter.addClass("abyss");
   abyssMeter.style("width", "200px");
   abyssMeter.style("height", "20px");
-  abyssMeter.style("z-index", "9999");
 
-  // Row 5: D-Pad + Preset Buttons
-  let row5 = createDiv();
-  row5.parent(controlPanel);
-  row5.style("display", "flex");
-  row5.style("gap", "60px");
-  row5.style("justify-content", "center");
-  row5.style("align-items", "flex-start");
+  // Row 6: Walls On/Off | D-Pad | PC, Mobile, Auto, Tablet
+  let row6 = createDiv();
+  row6.parent(controlPanel);
+  row6.style("display", "flex");
+  row6.style("justify-content", "center");
+  row6.style("align-items", "center");
+  row6.style("gap", "10px");
+  row6.style("margin-bottom", "10px");
 
-  // D-Pad
-  let dPadContainer = createDiv();
-  dPadContainer.parent(row5);
-  dPadContainer.style("display", "flex");
-  dPadContainer.style("flex-direction", "column");
-  dPadContainer.style("align-items", "center");
-  dPadContainer.style("gap", "5px");
-  dPadContainer.style("z-index", "9999");
+  let wallsBtn = createButton("Walls: OFF");
+  wallsBtn.parent(row6);
+  wallsBtn.mousePressed(() => {
+    wallsOn = !wallsOn;
+    wallsBtn.html("Walls: " + (wallsOn ? "ON" : "OFF"));
+  });
+
+  // D-Pad container
+  let dPadCont = createDiv();
+  dPadCont.parent(row6);
+  dPadCont.style("display", "flex");
+  dPadCont.style("flex-direction", "column");
+  dPadCont.style("align-items", "center");
+  dPadCont.style("gap", "5px");
 
   let dPadRow1 = createDiv();
-  dPadRow1.parent(dPadContainer);
+  dPadRow1.parent(dPadCont);
   dPadRow1.style("display", "flex");
   dPadRow1.style("justify-content", "center");
   dPadUp = createButton("↑");
   dPadUp.parent(dPadRow1);
-  dPadUp.style("font-size", "18px");
-  dPadUp.style("padding", "5px 10px");
   dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
   dPadUp.mouseReleased(() => { dPadDirection.y = 0; });
 
   let dPadRow2 = createDiv();
-  dPadRow2.parent(dPadContainer);
+  dPadRow2.parent(dPadCont);
   dPadRow2.style("display", "flex");
   dPadRow2.style("justify-content", "space-between");
-  dPadRow2.style("width", "100px");
+  dPadRow2.style("width", "60px");
   dPadLeft = createButton("←");
   dPadLeft.parent(dPadRow2);
-  dPadLeft.style("font-size", "18px");
-  dPadLeft.style("padding", "5px 10px");
   dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
   dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
 
   dPadRight = createButton("→");
   dPadRight.parent(dPadRow2);
-  dPadRight.style("font-size", "18px");
-  dPadRight.style("padding", "5px 10px");
   dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
   dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
 
   let dPadRow3 = createDiv();
-  dPadRow3.parent(dPadContainer);
+  dPadRow3.parent(dPadCont);
   dPadRow3.style("display", "flex");
   dPadRow3.style("justify-content", "center");
   dPadDown = createButton("↓");
   dPadDown.parent(dPadRow3);
-  dPadDown.style("font-size", "18px");
-  dPadDown.style("padding", "5px 10px");
   dPadDown.mousePressed(() => { dPadDirection.set(dPadDirection.x, 1); });
   dPadDown.mouseReleased(() => { dPadDirection.y = 0; });
 
   dPadDirection = createVector(0, 0);
 
-  // Preset Buttons
-  let presetContainer = createDiv();
-  presetContainer.parent(row5);
-  presetContainer.style("display", "flex");
-  presetContainer.style("flex-direction", "column");
-  presetContainer.style("align-items", "center");
-  presetContainer.style("gap", "5px");
-  presetContainer.style("z-index", "9999");
+  // Buttons for PC, Mobile, Auto, Tablet
+  let pcBtn = createButton("PC");
+  pcBtn.parent(row6);
+  pcBtn.mousePressed(() => {
+    autoMode = false;
+    resizeCanvas(1200, 900);
+    resetSimulation();
+  });
 
-  let pcBtn = createButton("PC (1200×900)");
-  pcBtn.parent(presetContainer);
-  pcBtn.style("font-size", "14px");
-  pcBtn.mousePressed(() => setCanvasSize(1200, 900));
-
-  let mobileBtn = createButton("Mobile (360×640)");
-  mobileBtn.parent(presetContainer);
-  mobileBtn.style("font-size", "14px");
-  mobileBtn.mousePressed(() => setCanvasSize(360, 640));
-
-  let tabletBtn = createButton("Tablet (768×1024)");
-  tabletBtn.parent(presetContainer);
-  tabletBtn.style("font-size", "14px");
-  tabletBtn.mousePressed(() => setCanvasSize(768, 1024));
+  let mobileBtn = createButton("Mobile");
+  mobileBtn.parent(row6);
+  mobileBtn.mousePressed(() => {
+    autoMode = false;
+    resizeCanvas(360, 640);
+    resetSimulation();
+  });
 
   let autoBtn = createButton("Auto");
-  autoBtn.parent(presetContainer);
-  autoBtn.style("font-size", "14px");
+  autoBtn.parent(row6);
   autoBtn.mousePressed(() => {
-    autoResize = true;
+    autoMode = true;
     resizeCanvas(windowWidth, windowHeight);
+    resetSimulation();
+  });
+
+  let tabletBtn = createButton("Tablet");
+  tabletBtn.parent(row6);
+  tabletBtn.mousePressed(() => {
+    autoMode = false;
+    resizeCanvas(768, 1024);
+    resetSimulation();
   });
 }
 
-function handleKeyboard(finalSpeed) {
-  // If finalSpeed=0 => stuck => no movement
-  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) {
-    if (finalSpeed > 0) singularity.pos.x -= finalSpeed;
-  }
-  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) {
-    if (finalSpeed > 0) singularity.pos.x += finalSpeed;
-  }
-  if (keyIsDown(UP_ARROW) || keyIsDown(87)) {
-    if (finalSpeed > 0) singularity.pos.y -= finalSpeed;
-  }
-  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) {
-    if (finalSpeed > 0) singularity.pos.y += finalSpeed;
-  }
-
-  singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
-  singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
-}
-
+// -------------------------------------------------------------------
+// 5) The rest of the game logic
+// -------------------------------------------------------------------
 function resetSimulation() {
   simulationRunning = true;
   explosionTimer = 0;
@@ -658,9 +688,22 @@ function spawnTendrils(n = 1) {
   }
 }
 
+function handleKeyboard() {
+  // Even if orbit slowing sets final speed to 0, we still read keys here, 
+  // but the final speed will be clamped in draw if orbits are high.
+  let kbSpeed = speedSlider.value();
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= kbSpeed;
+  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += kbSpeed;
+  if (keyIsDown(UP_ARROW) || keyIsDown(87)) singularity.pos.y -= kbSpeed;
+  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) singularity.pos.y += kbSpeed;
+
+  singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
+  singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
+}
+
 function keyReleased() {
-  if (keyCode === 32) triggerRepel(); // SPACE
-  if (keyCode === 86 && novaCooldown <= 0) { // V
+  if (keyCode === 32) triggerRepel();
+  if (keyCode === 86 && novaCooldown <= 0) {
     triggerNovaManual();
     novaCooldown = NOVA_COOLDOWN_TIME;
   }
@@ -708,6 +751,7 @@ function triggerNovaBurst() {
   lastNovaTime = millis();
 }
 
+// Touch
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
@@ -745,6 +789,14 @@ function touchEnded() {
   dPadActive = false;
 }
 
+function windowResized() {
+  // if auto mode is on, we resize & reset
+  if (autoMode) {
+    resizeCanvas(windowWidth, windowHeight);
+    resetSimulation();
+  }
+}
+
 function drawExplosion() {
   push();
   translate(singularity.pos.x, singularity.pos.y);
@@ -778,17 +830,4 @@ function drawExplosion() {
     pop();
   }
   pop();
-}
-
-// For auto/manual resizing
-function windowResized() {
-  if (autoResize) {
-    resizeCanvas(windowWidth, windowHeight);
-  }
-}
-
-// Let user pick a preset => disable autoResize
-function setCanvasSize(w, h) {
-  autoResize = false;
-  resizeCanvas(w, h);
 }
