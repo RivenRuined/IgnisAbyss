@@ -1,23 +1,25 @@
-console.log("Ignis.js loaded and running!");
+console.log("Ignis.js loaded and running!!!");
 
 /*
   Ignis x Abyss – Life x Death
 
-  Features in this version:
-  • No D-Pad – movement is via WSAD/Arrows and touchscreen swipes.
-  • Health states based on the assimilation (abyss) gauge:
-       • 0–50%: Gold → full speed, gold color.
-       • 50–75%: Pink → 75% speed, pink color.
-       • 75–100%: Purple → 50% speed, purple color.
-       • 100%: Black → 0 speed (dead); after 7 s, resets.
-     Also, when fewer than 3 tendrils are orbiting, the gauge heals (at 50% rate).
-  • HUD at the bottom with:
-       Row 1: Buttons (tappable): Spawn | Hunt | Burst | Nova.
-       Row 2: Sliders for Agro, Gravity, Speed.
-       Row 3: Labels for those sliders.
-       Row 4: Burst Meter & Nova Meter (cyan).
-       Row 5: Hunt Meter & Assimilation Meter (desaturated purple).
-       Row 6: Preset buttons: Walls On/Off | Auto | PC | Tablet | Mobile.
+  NEW Features:
+  • Health/Assimilation now has 4 states:
+       - Gold (0–50%): full speed, gold color.
+       - Pink (50–75%): 75% speed, pink color.
+       - Purple (75–100%): 50% speed, purple color.
+       - Black (100%): 0 speed (dead). After 7 seconds, assimilation resets.
+     When fewer than 3 tendrils are orbiting, the assimilation gauge heals (at half rate).
+  • The Nova Meter now fills in cyan from 0 up to its max value and remains full
+    until the Nova button is pressed. Pressing Nova resets the meter.
+  • Controls: WSAD/Arrow keys and touchscreen swipes.
+  • HUD is at the bottom with:
+       Row 1: Buttons: Spawn | Hunt | Burst | Nova
+       Row 2: Sliders: Agro | Gravity | Speed
+       Row 3: Labels: Agro | Gravity | Speed
+       Row 4: Meters: Burst Meter & Nova Meter (cyan)
+       Row 5: Meters: Hunt Meter & Assimilation Meter (desat purple)
+       Row 6: Preset Buttons: Walls On/Off | Auto | PC | Tablet | Mobile
   • Walls toggle makes tendrils bounce off canvas edges.
 */
 
@@ -37,7 +39,7 @@ class Singularity {
   }
   
   update() {
-    // (Visual updates are handled externally via health state)
+    // (Visual changes are applied externally based on assimilation fraction.)
   }
   
   show() {
@@ -78,7 +80,7 @@ class Tendril {
   
   autoHunt(targetPos) {
     let force = p5.Vector.sub(targetPos, this.pos);
-    force.setMag(random(1, 2));
+    force.setMag(random(1,2));
     this.vel = force;
   }
   
@@ -169,7 +171,7 @@ class Tendril {
         drawColor = lerpColor(cyanColor, blackColor, amt);
       }
     } else {
-      drawColor = color(130, 0, 130);
+      drawColor = color(130,0,130);
     }
     fill(drawColor);
     ellipse(this.pos.x, this.pos.y, 7, 7);
@@ -197,9 +199,9 @@ let ABSYSS_THRESHOLD = 13000;
 let HUNT_THRESHOLD = 5000;
 let NOVA_COOLDOWN_TIME = 10000;
 
-let novaTimer = 0;
+let novaTimer = 0; // This meter fills gradually until it reaches NOVA_THRESHOLD.
 let huntTimer = 0;
-let abyssAccumulator = 0;
+let abyssAccumulator = 0; // Assimilation gauge.
 let novaCooldown = 0;
 let spawnTimer = 0;
 const SPAWN_INTERVAL = 5000;
@@ -226,7 +228,7 @@ let burstMeter, novaMeter, huntMeter, abyssMeter;
 let wallsOn = false;
 let autoMode = true;
 
-// For touch swiping
+// For touchscreen swiping
 let lastTouchX = 0, lastTouchY = 0;
 
 // -------------------------------------------------------------------
@@ -234,11 +236,11 @@ let lastTouchX = 0, lastTouchY = 0;
 // -------------------------------------------------------------------
 function setup() {
   // Set color variables
-  purpleColor = color(130,0,130);
-  cyanColor = color(0,255,255);
-  blackColor = color(0,0,0);
+  purpleColor = color(130, 0, 130);
+  cyanColor = color(0, 255, 255);
+  blackColor = color(0, 0, 0);
   
-  // Auto-resize canvas by default
+  // Auto-resize by default
   createCanvas(windowWidth, windowHeight);
   createHUD_Bottom();
   resetSimulation();
@@ -252,7 +254,10 @@ function draw() {
   if (frac > 1) frac = 1;
   
   // Determine health state and speed factor:
-  // 0–0.5: Gold → full speed, 0.5–0.75: Pink → 75% speed, 0.75–1: Purple → 50% speed, 1: Black → 0 speed
+  // Gold: 0–50% → full speed.
+  // Pink: 50–75% → 75% speed.
+  // Purple: 75–100% → 50% speed.
+  // Black: 100% → 0 speed.
   let healthState;
   let speedFactor = 1;
   if (frac < 0.5) {
@@ -269,7 +274,7 @@ function draw() {
     speedFactor = 0;
   }
   
-  // If dead, count time; if >7 s, reset assimilation (heal)
+  // If dead, count time and reset after 7 seconds.
   if (healthState === "black") {
     singularity.deadTimer = (singularity.deadTimer || 0) + deltaTime;
     if (singularity.deadTimer > 7000) {
@@ -277,37 +282,46 @@ function draw() {
     }
   } else {
     singularity.deadTimer = 0;
-    // Also heal slowly when not enough tendrils are orbiting:
+    // Heal slowly if fewer than 3 tendrils are orbiting.
     if (getOrbitCount() < 3 && abyssAccumulator > 0) {
-      // Heal at half the accumulation rate
       abyssAccumulator = max(0, abyssAccumulator - deltaTime * 0.5);
     }
   }
   
-  // Set singularity color based on health state
+  // Set singularity color based on health state.
   let finalColor;
   if (healthState === "gold") {
-    finalColor = color(255,215,0); // Gold
+    finalColor = color(255,215,0); // Gold.
   } else if (healthState === "pink") {
-    finalColor = color(255,105,180); // Pink
+    finalColor = color(255,105,180); // Pink.
   } else if (healthState === "purple") {
-    finalColor = color(128,0,128); // Purple
+    finalColor = color(128,0,128); // Purple.
   } else {
-    finalColor = color(0,0,0); // Black
+    finalColor = color(0,0,0); // Black.
   }
   singularity.currentColor = finalColor;
   singularity.state = healthState;
   
-  // Final speed from slider times speed factor
+  // Compute final speed based on slider and health.
   let baseSpeed = speedSlider.value();
   let finalSpeed = baseSpeed * speedFactor;
   
-  // Handle keyboard (WSAD/Arrows) using finalSpeed
+  // Handle keyboard movement (WSAD/Arrow keys) using finalSpeed.
   handleKeyboard(finalSpeed);
   
-  // Handle touchscreen swiping (update done in touchMoved)
+  // Touchscreen swiping is handled in touchMoved.
   
-  // Timers: spawn, hunt, nova
+  // Nova Meter logic:
+  // Fill novaTimer until it reaches NOVA_THRESHOLD, then remain full.
+  if (novaTimer < NOVA_THRESHOLD) {
+    novaTimer += deltaTime;
+    if (novaTimer > NOVA_THRESHOLD) {
+      novaTimer = NOVA_THRESHOLD;
+    }
+  }
+  novaMeter.attribute("value", novaTimer.toString());
+  
+  // Timers for spawning, hunt.
   spawnTimer += deltaTime;
   if (spawnTimer > SPAWN_INTERVAL) {
     spawnTendrils(10);
@@ -321,19 +335,13 @@ function draw() {
   }
   huntMeter.attribute("value", huntTimer.toString());
   
-  novaTimer += deltaTime;
-  if (novaTimer >= NOVA_THRESHOLD) {
-    triggerNovaBurst();
-    novaTimer = 0;
+  // Assimilation (Abyss) Meter update.
+  if (getOrbitCount() >= 3 && healthState !== "black") {
+    abyssAccumulator += deltaTime;
   }
-  novaMeter.attribute("value", novaTimer.toString());
+  abyssMeter.attribute("value", abyssAccumulator.toString());
   
-  if (novaCooldown > 0) {
-    novaCooldown -= deltaTime;
-    if (novaCooldown < 0) novaCooldown = 0;
-  }
-  
-  // Update singularity and tendrils
+  // Update singularity and tendrils.
   singularity.update();
   singularity.show();
   
@@ -347,20 +355,14 @@ function draw() {
     t.show();
   }
   
-  // Increase assimilation if ≥3 tendrils orbit the singularity
-  if (getOrbitCount() >= 3 && healthState !== "black") {
-    abyssAccumulator += deltaTime;
-  }
-  abyssMeter.attribute("value", abyssAccumulator.toString());
+  // Remove dead tendrils.
+  tendrils = tendrils.filter(t => !t.dead);
   
-  // Handle explosion effects if any
+  // Explosion effect (if any).
   if (explosionTimer > 0) {
     drawExplosion();
     explosionTimer -= deltaTime;
   }
-  
-  // Remove dead tendrils
-  tendrils = tendrils.filter(t => !t.dead);
 }
 
 function getOrbitCount() {
@@ -396,7 +398,7 @@ function createHUD_Bottom() {
   controlPanel.style("z-index", "9999");
   controlPanel.parent(document.body);
   
-  // Row 1: Buttons (use mouseClicked so they're tappable)
+  // Row 1: Buttons (tappable)
   let row1 = createDiv();
   row1.parent(controlPanel);
   row1.style("display", "flex");
@@ -420,9 +422,10 @@ function createHUD_Bottom() {
   let novaBtn = createButton("Nova");
   novaBtn.parent(row1);
   novaBtn.mouseClicked(() => {
-    if (novaCooldown <= 0) {
+    // Only allow Nova if the meter is full.
+    if (novaTimer >= NOVA_THRESHOLD) {
       triggerNovaManual();
-      novaCooldown = NOVA_COOLDOWN_TIME;
+      novaTimer = 0; // reset the Nova meter
     }
   });
   
@@ -432,8 +435,8 @@ function createHUD_Bottom() {
     btn.style("color", "#9C89B8");
     btn.style("padding", "5px 10px");
   });
-  burstBtn.style("color", "#00FFFF"); // Burst meter should be cyan
-  novaBtn.style("color", "#00FFFF");  // Nova meter should be cyan
+  burstBtn.style("color", "#00FFFF");
+  novaBtn.style("color", "#00FFFF");
   
   // Row 2: Sliders for Agro, Gravity, Speed
   let row2 = createDiv();
@@ -456,7 +459,7 @@ function createHUD_Bottom() {
   speedSlider.parent(row2);
   speedSlider.style("width", "120px");
   
-  // Row 3: Labels for the sliders
+  // Row 3: Labels for sliders
   let row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
@@ -480,7 +483,7 @@ function createHUD_Bottom() {
   spdLabel.style("font-size", "14px");
   spdLabel.style("color", "#CCCCCC");
   
-  // Row 4: Meters: Burst Meter and Nova Meter (both cyan)
+  // Row 4: Meters for Burst & Nova (cyan)
   let row4 = createDiv();
   row4.parent(controlPanel);
   row4.style("display", "flex");
@@ -503,7 +506,7 @@ function createHUD_Bottom() {
   novaMeter.attribute("value", "0");
   novaMeter.addClass("cyanMeter");
   
-  // Row 5: Meters: Hunt Meter and Assimilation (Abyss) Meter (desaturated purple)
+  // Row 5: Meters for Hunt & Assimilation (desaturated purple)
   let row5 = createDiv();
   row5.parent(controlPanel);
   row5.style("display", "flex");
@@ -573,7 +576,7 @@ function createHUD_Bottom() {
     resetSimulation();
   });
   
-  // Style for cyan meters
+  // Add style for cyan and desatpurple meters
   createElement('style', `
     meter.cyanMeter::-webkit-meter-optimum-value { background: #00FFFF; }
     meter.cyanMeter::-webkit-meter-suboptimum-value { background: #00FFFF; }
@@ -671,6 +674,7 @@ function triggerNovaManual() {
   }
   explosionType = "nova";
   explosionTimer = 500;
+  novaTimer = 0; // Reset Nova Meter upon action.
 }
 
 function triggerNovaBurst() {
@@ -688,7 +692,7 @@ function triggerNovaBurst() {
   lastNovaTime = millis();
 }
 
-// Touchscreen swiping: update singularity based on touch movement
+// Touchscreen swiping: update singularity based on touch movement.
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
@@ -710,7 +714,7 @@ function touchMoved() {
 }
 
 function touchEnded() {
-  // Nothing extra needed
+  // Nothing extra.
 }
 
 function windowResized() {
@@ -727,13 +731,13 @@ function drawExplosion() {
   let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
   
   if (explosionType === "nova") {
-    stroke(0,255,255,alphaVal);
+    stroke(0,255,255, alphaVal);
   } else if (explosionType === "burst") {
-    stroke(0,255,255,alphaVal);
+    stroke(0,255,255, alphaVal);
   } else if (explosionType === "death") {
-    stroke(255,0,255,alphaVal);
+    stroke(255,0,255, alphaVal);
   } else {
-    stroke(0,255,255,alphaVal);
+    stroke(0,255,255, alphaVal);
   }
   
   noFill();
