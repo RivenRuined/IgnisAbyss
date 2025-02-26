@@ -1,27 +1,17 @@
 console.log("Ignis.js loaded and running!");
 
-/* 
+/*
   Ignis x Abyss – Life x Death
+  Minimal final version
 
-  Final version: 
-  - Touch logic uses p5's touch.x & touch.y in canvas coordinates.
-  - We only process swipes if (touch.x, touch.y) is inside the canvas area:
-       0 <= touch.x <= width
-       0 <= touch.y <= height
-  - This leaves the HUD (above or below the canvas) fully clickable/tappable.
-  - D-Pad uses mousePressed() so it works on mobile taps.
-  - "Agro" = old "Aggression," "Movement" is for touch only, "Speed" is for keyboard.
-
-  HUD Layout:
-    Row 1: [Spawn | Hunt | Burst | Nova]
-    Row 2: [Agro, Gravity, Speed, Movement inputs]
-    Row 3: [Agro, Gravity, Speed, Movement labels]
-    Row 4: [Nova, NovaCooldown meters]
-    Row 5: [Hunt, Abyss meters]
-    Row 6: [D-Pad: Up, Left/Right, Down]
+  - "Agro" = old "Aggression"
+  - "Gravity", "Speed" for keyboard & AI
+  - "Movement" for touch
+  - D-Pad (Up, Left/Right, Down) uses mousePressed() for taps
+  - Only processes swipes if (touch.x,y) is inside the canvas
 */
 
-// ---------------- Constants & Variables ----------------
+// ---------------- Global Constants & Variables ----------------
 const TENDRIL_COUNT = 20;
 const ORBIT_DISTANCE = 50;
 const NOVA_THRESHOLD = 3500;
@@ -49,15 +39,15 @@ let tendrils = [];
 let singularity;
 let simulationRunning = true;
 
-// Keyboard movement speed
+// Movement speed for keyboard
 let moveSpeed = 1.95;
 
-// p5 DOM
+// p5 DOM elements
 let container;
 let cnv;
 let controlPanel;
 
-// HUD Rows
+// Rows
 let row1, row2, row3, row4, row5, row6;
 
 // Buttons
@@ -69,9 +59,9 @@ let agroInput, gravityInput, speedInput, movementInput;
 // Meters
 let novaMeter, novaCooldownMeter, huntMeter, abyssMeter;
 
-// D-Pad
+// D-Pad references
 let dPadUp, dPadDown, dPadLeft, dPadRight;
-let dPadDirection; // p5.Vector
+let dPadDirection; // p5.Vector for D-Pad direction
 
 // Touch variables
 let dPadActive = false;
@@ -95,12 +85,12 @@ function setup() {
   cnv = createCanvas(1200, 900);
   cnv.parent(container);
 
-  // Colors
+  // Define colors
   purpleColor = color(130, 0, 130);
   cyanColor = color(0, 255, 255);
   blackColor = color(0, 0, 0);
 
-  // Meters styling
+  // Optional meter styling
   createElement('style', `
     meter.nova::-webkit-meter-optimum-value { background: #008B8B; }
     meter.nova::-webkit-meter-suboptimum-value { background: #008B8B; }
@@ -119,7 +109,7 @@ function setup() {
     meter.novacooldown::-moz-meter-bar { background: #555555; }
   `).parent(document.head);
 
-  // Control Panel
+  // Control Panel (HUD)
   controlPanel = createDiv();
   controlPanel.parent(container);
   controlPanel.style("background", "black");
@@ -169,7 +159,7 @@ function setup() {
   burstBtn.style("color", "#00FFFF");
   novaBtn.style("color", "#00FFFF");
 
-  // Row 2: Numeric Inputs
+  // Row 2: Numeric Inputs (Agro, Gravity, Speed, Movement)
   row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
@@ -190,13 +180,13 @@ function setup() {
   gravityInput.style("width", "60px");
   gravityInput.style("text-align", "center");
 
-  speedInput = createInput('1.95', 'number'); // keyboard
+  speedInput = createInput('1.95', 'number'); // Keyboard
   speedInput.parent(row2);
   speedInput.style("font-size", "18px");
   speedInput.style("width", "60px");
   speedInput.style("text-align", "center");
 
-  movementInput = createInput('1.0', 'number'); // touch
+  movementInput = createInput('1.0', 'number'); // Touch
   movementInput.parent(row2);
   movementInput.style("font-size", "18px");
   movementInput.style("width", "60px");
@@ -231,7 +221,7 @@ function setup() {
   moveLabel.style("font-size", "14px");
   moveLabel.style("color", "#CCCCCC");
 
-  // Row 4: Nova & NovaCooldown
+  // Row 4: Nova & NovaCooldown Meters
   row4 = createDiv();
   row4.parent(controlPanel);
   row4.style("display", "flex");
@@ -258,7 +248,7 @@ function setup() {
   novaCooldownMeter.style("width", "200px");
   novaCooldownMeter.style("height", "20px");
 
-  // Row 5: Hunt & Abyss
+  // Row 5: Hunt & Abyss Meters
   row5 = createDiv();
   row5.parent(controlPanel);
   row5.style("display", "flex");
@@ -370,7 +360,7 @@ function draw() {
   background(0);
   handleKeyboard();
 
-  // D-Pad movement uses "Movement" input
+  // D-Pad movement (touch uses "Movement" input)
   if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
     let touchSpeed = parseFloat(movementInput.value());
     singularity.pos.x += dPadDirection.x * touchSpeed;
@@ -464,20 +454,15 @@ function draw() {
   }
 }
 
-// --------------- Touch Controls ---------------
-
+// --------------- Touch Input ---------------
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
-    // Convert to p5 canvas coords:
-    // t.x, t.y range from 0..width, 0..height if inside the canvas
-    // If outside (like on HUD), we ignore
+    // If user tapped outside canvas, do nothing
     if (t.x < 0 || t.x > width || t.y < 0 || t.y > height) {
-      // Touch is outside the canvas
       return false;
     }
-
-    // If within left 30% → D-Pad
+    // If x < 30% → D-Pad
     if (t.x < width * 0.3) {
       dPadActive = true;
     } else {
@@ -491,20 +476,18 @@ function touchStarted() {
 function touchMoved() {
   if (touches.length > 0) {
     let t = touches[0];
-    // If outside the canvas, ignore
+    // If outside canvas, ignore
     if (t.x < 0 || t.x > width || t.y < 0 || t.y > height) {
       return false;
     }
-
     if (dPadActive) {
-      // Just move the singularity by the difference from a "D-Pad center"
+      // Just move by difference from an assumed center
       let dx = t.x - 80;
       let dy = t.y - 820;
       let factor = parseFloat(movementInput.value());
       singularity.pos.x += dx * factor;
       singularity.pos.y += dy * factor;
     } else {
-      // Swipe-based movement
       let dx = t.x - touchStartX;
       let dy = t.y - touchStartY;
       let factor = parseFloat(movementInput.value());
@@ -573,7 +556,7 @@ class Singularity {
 
   update() {
     if (this.state === "healthy") {
-      // Pulsate color
+      // Pulsate color from gold to orange
       this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
       let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
       let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
@@ -634,7 +617,6 @@ class Tendril {
     } else {
       this.pos = createVector(0, random(height));
     }
-
     this.vel = createVector(0, 0);
     this.acc = createVector(0, 0);
     this.maxSpeed = 3;
@@ -654,7 +636,7 @@ class Tendril {
   }
 
   hunt(targetPos) {
-    this.boostTimer = 30; // short hunt boost
+    this.boostTimer = 30;
   }
 
   orbit(targetPos, pullStrength) {
