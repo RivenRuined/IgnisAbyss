@@ -9,8 +9,8 @@ console.log("Ignis.js loaded and running!!");
   • Pressing Nova button only works if novaTimer >= NOVA_THRESHOLD. This resets the meter to 0.
   • Assimilation (abyss) has 4 states: Gold, Pink, Purple, Black. Heals at half rate if fewer than 3 orbit.
   • Movement: WSAD/Arrow keys, plus touchscreen swipes.
-  • HUD at bottom. Meters: 
-       - Row 4: Burst & Nova (cyan) 
+  • HUD at bottom. Meters:
+       - Row 4: Burst & Nova (cyan)
        - Row 5: Hunt & Assimilation (purple)
 */
 
