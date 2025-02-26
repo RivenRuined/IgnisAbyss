@@ -3,6 +3,22 @@
   <head>
     <meta charset="UTF-8">
     <title>Ignis x Abyss – Life x Death</title>
+    <style>
+      /* Nova and Burst meters styled as cyan */
+      meter.cyanMeter::-webkit-meter-bar {
+         background: #00FFFF;
+      }
+      meter.cyanMeter::-moz-meter-bar {
+         background: #00FFFF;
+      }
+      /* Hunt and Assimilation meters styled as desaturated purple */
+      meter.desatpurple::-webkit-meter-bar {
+         background: #9370DB;
+      }
+      meter.desatpurple::-moz-meter-bar {
+         background: #9370DB;
+      }
+    </style>
     <!-- p5 libraries -->
     <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/p5.dom@1.0.0/lib/p5.dom.js"></script>
@@ -14,8 +30,8 @@
       Ignis x Abyss – Life x Death
     </h1>
     <p style="margin:0; padding:10px; color:white;">
-      This build includes Walls On/Off toggle, Screen Presets (Auto, PC, Tablet, Mobile), and the D-Pad controls.
-      Check the browser console for "Ignis.js loaded and running!!!"
+      This build features: Nova meter (cyan) that fills and stays full until Nova is triggered (then resets and rebuilds), 
+      Burst meter (cyan), and Hunt/Assimilation meter (desaturated purple), plus Walls toggle and Screen Presets.
     </p>
   </body>
 </html>
