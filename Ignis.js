@@ -214,6 +214,7 @@ function draw() {
     if (singularity.deadTimer>7000) resetAssimilation();
   } else {
     singularity.deadTimer=0;
+    // Heal if <3 orbit
     if (getOrbitCount()<3 && abyssAccumulator>0) {
       abyssAccumulator = max(0, abyssAccumulator - deltaTime*0.5);
     }
@@ -228,7 +229,7 @@ function draw() {
   singularity.state=st;
   singularity.currentColor=c;
   
-  // Nova meter: fill to max, remain at max
+  // Nova meter: fill to max, remain max until pressed
   if (novaTimer<NOVA_THRESHOLD) {
     novaTimer += deltaTime;
     if (novaTimer> NOVA_THRESHOLD) novaTimer = NOVA_THRESHOLD;
@@ -239,7 +240,7 @@ function draw() {
   let baseSpeed = speedSlider.value();
   let finalSpeed = baseSpeed * speedFactor;
   
-  // handle keyboard
+  // keyboard
   handleKeyboard(finalSpeed);
   
   // Timers
@@ -324,7 +325,7 @@ function createHUD_Bottom() {
   novaBtn.mouseClicked(()=>{
     if (novaTimer>=NOVA_THRESHOLD) {
       triggerNovaManual();
-      novaTimer=0; // reset so it can refill
+      novaTimer=0; 
     }
   });
   
