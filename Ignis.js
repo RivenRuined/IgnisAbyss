@@ -17,16 +17,19 @@ console.log("Ignis.js loaded and running!!");
 // -------------------------------------------------------------------
 // 1) Classes
 // -------------------------------------------------------------------
-
 class Singularity {
   constructor(x, y) {
     this.pos = createVector(x, y);
     this.radius = 15;
-    this.deadTimer = 0;    // time spent in dead state
-    this.state = "healthy"; 
+    this.deadTimer = 0;    // time spent in black/dead state
+    this.state = "healthy";
     this.currentColor = color(255,215,0); // gold
   }
-  update() {}
+
+  update() {
+    // For now, no special logic inside update
+  }
+
   show() {
     noStroke();
     if (this.state === "dead") {
@@ -41,6 +44,7 @@ class Singularity {
 
 class Tendril {
   constructor() {
+    // Spawn on a random edge
     let edge = floor(random(4));
     if (edge===0) this.pos = createVector(random(width), 0);
     else if (edge===1) this.pos = createVector(width, random(height));
@@ -58,29 +62,36 @@ class Tendril {
     this.immolateDuration = 2000;
     this.dead = false;
   }
+
   autoHunt(targetPos) {
     let force = p5.Vector.sub(targetPos, this.pos);
     force.setMag(random(1,2));
     this.vel = force;
   }
+
   hunt(targetPos) {
-    this.boostTimer = 30;
+    this.boostTimer = 30; // cause a direct pull
   }
+
   orbit(targetPos, pullStrength) {
     let desired = p5.Vector.sub(targetPos, this.pos);
     let tangent = createVector(-desired.y, desired.x);
     tangent.normalize();
     tangent.mult(pullStrength);
+
     desired.normalize();
     desired.mult(pullStrength);
+
     this.acc.add(p5.Vector.add(desired, tangent));
   }
+
   startImmolation() {
     if (!this.immolating) {
       this.immolating = true;
       this.immolateTimer = 0;
     }
   }
+
   update() {
     if (!simulationRunning) return;
     
@@ -117,9 +128,11 @@ class Tendril {
       }
     }
     
+    // keep tail
     this.tail.push(this.pos.copy());
     if (this.tail.length>this.tailMax) this.tail.shift();
   }
+
   show() {
     noStroke();
     let drawColor;
@@ -160,7 +173,7 @@ const ABSYSS_THRESHOLD=13000;
 const HUNT_THRESHOLD=5000;
 const NOVA_COOLDOWN_TIME=10000;
 
-let novaTimer=0;           // Nova meter, from 0 up to NOVA_THRESHOLD
+let novaTimer=0;           // Nova meter
 let huntTimer=0;           // Hunt meter
 let abyssAccumulator=0;    // assimilation
 let novaCooldown=0;
@@ -170,16 +183,12 @@ const SPAWN_INTERVAL=5000;
 let explosionTimer=0;
 const explosionDuration=500;
 let explosionType="none";
-let deathBurstCount=0;
-const deathBurstInterval=300;
-let deathBurstTimer=0;
 
 let purpleColor, cyanColor, blackColor;
 let tendrils=[];
 let singularity;
 let simulationRunning=true;
 
-// HUD
 let agroSlider, gravitySlider, speedSlider;
 let burstMeter, novaMeter, huntMeter, abyssMeter;
 let wallsOn=false, autoMode=true;
@@ -203,19 +212,17 @@ function setup() {
 function draw() {
   background(0);
   
-  // 1) Assimilation fraction => health states
+  // 1) assimilation fraction => color & speed factor
   let frac = abyssAccumulator/ABSYSS_THRESHOLD;
   if (frac>1) frac=1;
   
-  // health => speed factor
   let speedFactor=1;
   let st;
   if (frac<0.5) { st="gold"; speedFactor=1; }
   else if (frac<0.75) { st="pink"; speedFactor=0.75; }
   else if (frac<1) { st="purple"; speedFactor=0.5; }
   else { st="black"; speedFactor=0; }
-  
-  // If black => 7s => reset
+
   if (st==="black") {
     singularity.deadTimer += deltaTime;
     if (singularity.deadTimer>7000) resetAssimilation();
@@ -226,14 +233,13 @@ function draw() {
       abyssAccumulator = max(0, abyssAccumulator - deltaTime*0.5);
     }
   }
-  
-  // color
+
   let c;
   if (st==="gold") c=color(255,215,0);
   else if (st==="pink") c=color(255,105,180);
   else if (st==="purple") c=color(128,0,128);
   else c=color(0,0,0);
-  
+
   singularity.state=st;
   singularity.currentColor=c;
   
@@ -242,12 +248,11 @@ function draw() {
     novaTimer += deltaTime;
     if (novaTimer> NOVA_THRESHOLD) novaTimer = NOVA_THRESHOLD;
   }
-  // Update meter
   novaMeter.attribute("value", novaTimer.toString());
   
   // 3) final speed = slider * factor
   let baseSpeed = speedSlider.value();
-  let finalSpeed = baseSpeed*speedFactor;
+  let finalSpeed = baseSpeed * speedFactor;
   
   // 4) handle keyboard
   handleKeyboard(finalSpeed);
@@ -283,33 +288,12 @@ function draw() {
     t.update();
     t.show();
   }
-  
-  // remove dead
   tendrils = tendrils.filter(t=>!t.dead);
   
-  // explosion effect
   if (explosionTimer>0) {
     drawExplosion();
     explosionTimer -= deltaTime;
   }
-}
-
-// get orbit count
-function getOrbitCount() {
-  let c=0;
-  for (let t of tendrils) {
-    let d=p5.Vector.dist(t.pos, singularity.pos);
-    if (d<ORBIT_DISTANCE) c++;
-  }
-  return c;
-}
-
-// reset assimilation
-function resetAssimilation() {
-  abyssAccumulator=0;
-  singularity.deadTimer=0;
-  singularity.state="gold";
-  singularity.currentColor=color(255,215,0);
 }
 
 // -------------------------------------------------------------------
@@ -352,12 +336,10 @@ function createHUD_Bottom() {
   
   let novaBtn=createButton("Nova");
   novaBtn.parent(row1);
-  // Only resets the meter if it's full
   novaBtn.mouseClicked(()=>{
     if (novaTimer>=NOVA_THRESHOLD) {
       triggerNovaManual();
-      // This resets the meter to 0 so it can refill
-      novaTimer=0;
+      novaTimer=0; // reset so it can refill
     }
   });
   
@@ -438,7 +420,7 @@ function createHUD_Bottom() {
   novaMeter.attribute("value","0");
   novaMeter.addClass("cyanMeter");
   
-  // Row5: Meters: Hunt & Assimilation => both desatpurple
+  // Row5: Meters: Hunt & Assimilation => both purple
   let row5=createDiv();
   row5.parent(controlPanel);
   row5.style("display","flex");
@@ -461,5 +443,138 @@ function createHUD_Bottom() {
   abyssMeter.attribute("value","0");
   abyssMeter.addClass("desatpurple");
   
-  // Row6: Presets: Walls On/Off, Auto, PC, Tablet, Mobile
-  let row6=createDiv()
+  // Row6: Presets: Walls On/Off, Auto
+  let row6=createDiv();
+  row6.parent(controlPanel);
+  row6.style("display","flex");
+  row6.style("justify-content","center");
+  row6.style("align-items","center");
+  row6.style("gap","20px");
+  row6.style("margin-bottom","10px");
+  
+  let wallsBtn = createButton("Walls: Off");
+  wallsBtn.parent(row6);
+  wallsBtn.mouseClicked(()=>{
+    wallsOn = !wallsOn;
+    wallsBtn.html("Walls: " + (wallsOn ? "On" : "Off"));
+  });
+  
+  let autoBtn = createButton("Auto: On");
+  autoBtn.parent(row6);
+  autoBtn.mouseClicked(()=>{
+    autoMode = !autoMode;
+    autoBtn.html("Auto: " + (autoMode ? "On" : "Off"));
+  });
+}
+
+// -------------------------------------------------------------------
+// 5) Utility Functions
+// -------------------------------------------------------------------
+function handleKeyboard(finalSpeed) {
+  if (!simulationRunning) return;
+  let x=0, y=0;
+  // WASD or Arrows
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65))  x=-1;
+  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) x=1;
+  if (keyIsDown(UP_ARROW) || keyIsDown(87))    y=-1;
+  if (keyIsDown(DOWN_ARROW) || keyIsDown(83))  y=1;
+  
+  if (x!==0 || y!==0) {
+    let move = createVector(x,y).normalize().mult(finalSpeed);
+    singularity.pos.add(move);
+  }
+}
+
+// spawn new tendrils
+function spawnTendrils(count) {
+  for (let i=0;i<count;i++){
+    let t=new Tendril();
+    tendrils.push(t);
+  }
+}
+
+// triggers the “hunt” behavior
+function triggerHunt() {
+  for (let t of tendrils) {
+    t.hunt(singularity.pos);
+  }
+}
+
+// triggers the “repel” burst
+function triggerRepel() {
+  for (let t of tendrils) {
+    let force = p5.Vector.sub(t.pos, singularity.pos);
+    force.setMag(10);
+    t.vel.add(force);
+  }
+  // visually fill the burst meter for a moment
+  burstMeter.attribute("value", NOVA_THRESHOLD.toString());
+}
+
+// manual Nova
+function triggerNovaManual() {
+  explosionType="nova";
+  explosionTimer=explosionDuration;
+  for (let t of tendrils) {
+    t.startImmolation();
+  }
+}
+
+// explosion effect
+function drawExplosion() {
+  noFill();
+  stroke(cyanColor);
+  strokeWeight(4);
+  let r = map(explosionTimer, explosionDuration, 0, 0, width*1.5);
+  ellipse(singularity.pos.x, singularity.pos.y, r, r);
+  noStroke();
+}
+
+// get how many are in orbit range
+function getOrbitCount() {
+  let c=0;
+  for (let t of tendrils) {
+    let d=p5.Vector.dist(t.pos, singularity.pos);
+    if (d<ORBIT_DISTANCE) c++;
+  }
+  return c;
+}
+
+// reset assimilation
+function resetAssimilation() {
+  abyssAccumulator=0;
+  singularity.deadTimer=0;
+  singularity.state="gold";
+  singularity.currentColor=color(255,215,0);
+}
+
+// fully reset
+function resetSimulation() {
+  singularity = new Singularity(width/2, height/2);
+  tendrils=[];
+  spawnTendrils(TENDRIL_COUNT);
+  
+  novaTimer=0;
+  huntTimer=0;
+  abyssAccumulator=0;
+  spawnTimer=0;
+  explosionTimer=0;
+  explosionType="none";
+  
+  simulationRunning=true;
+}
+
+// For mobile swiping
+function touchStarted() {
+  lastTouchX=mouseX;
+  lastTouchY=mouseY;
+}
+
+function touchMoved() {
+  let dx=mouseX-lastTouchX;
+  let dy=mouseY-lastTouchY;
+  singularity.pos.add(dx,dy);
+  lastTouchX=mouseX;
+  lastTouchY=mouseY;
+  return false; // prevent default
+}
