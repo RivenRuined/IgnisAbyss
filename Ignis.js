@@ -1,4 +1,4 @@
-console.log("Ignis.js loaded and running!!!");
+console.log("Ignis.js loaded and running!!");
 
 /*
   Ignis x Abyss – Life x Death
@@ -14,6 +14,12 @@ console.log("Ignis.js loaded and running!!!");
   4) Four screen-size preset buttons + Auto.
   5) 3+ tendrils in orbit => assimilation. 
      Pink => eventually black => no movement => eventually gold => normal again.
+  
+  Meter Fixes:
+  - Nova and Burst meters (in Row 4) are styled as cyan.
+  - Nova Meter fills up until it reaches NOVA_THRESHOLD and remains full (cyan) until the Nova button is pressed.
+  - When Nova is triggered, novaTimer resets to 0.
+  - Hunt and Assimilation meters (Row 5) are styled as desaturated purple.
 */
 
 // -------------------------------------------------------------------
@@ -299,36 +305,14 @@ function setup() {
 function draw() {
   background(0);
 
-  // 1) figure out singularity's current speed based on health state
-  let baseSpeed = speedSlider.value();
-  let finalSpeed = 0;
-  if (singularity.state === "healthy") {
-    // gold
-    finalSpeed = baseSpeed;
-  } else if (singularity.state === "assimilating") {
-    // pink => half speed
-    finalSpeed = baseSpeed * 0.5;
-  } else if (singularity.state === "dead") {
-    // black => 0
-    finalSpeed = 0;
+  // Nova Meter: Fill up until NOVA_THRESHOLD, then remain full
+  if (novaTimer < NOVA_THRESHOLD) {
+      novaTimer += deltaTime;
+      if (novaTimer > NOVA_THRESHOLD) novaTimer = NOVA_THRESHOLD;
   }
+  novaMeter.attribute("value", novaTimer.toString());
 
-  // 2) handle keyboard movement using finalSpeed
-  handleKeyboard(finalSpeed);
-
-  // 3) handle D-Pad using finalSpeed
-  if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
-    singularity.pos.x += dPadDirection.x * finalSpeed;
-    singularity.pos.y += dPadDirection.y * finalSpeed;
-  }
-
-  // timers
-  spawnTimer += deltaTime;
-  if (spawnTimer > SPAWN_INTERVAL) {
-    spawnTendrils(10);
-    spawnTimer = 0;
-  }
-
+  // Hunt Timer remains as before
   huntTimer += deltaTime;
   if (huntTimer >= HUNT_THRESHOLD) {
     triggerHunt();
@@ -336,24 +320,25 @@ function draw() {
   }
   huntMeter.attribute("value", huntTimer.toString());
 
-  novaTimer += deltaTime;
-  if (novaTimer >= NOVA_THRESHOLD) {
-    triggerNovaBurst();
-    novaTimer = 0;
-  }
-  novaMeter.attribute("value", novaTimer.toString());
-
+  // novaCooldown updates as before
   if (novaCooldown > 0) {
     novaCooldown -= deltaTime;
     if (novaCooldown < 0) novaCooldown = 0;
   }
   novaCooldownMeter.attribute("value", novaCooldown.toString());
 
-  // singularity update
+  // Other timers
+  spawnTimer += deltaTime;
+  if (spawnTimer > SPAWN_INTERVAL) {
+    spawnTendrils(10);
+    spawnTimer = 0;
+  }
+
+  // Update and show singularity
   singularity.update();
   singularity.show();
 
-  // update & show tendrils
+  // Update and show tendrils
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
     if (d < ORBIT_DISTANCE) {
@@ -363,8 +348,9 @@ function draw() {
     t.update();
     t.show();
   }
+  tendrils = tendrils.filter(t => !t.dead);
 
-  // assimilation logic
+  // Assimilation logic
   let countOrbit = 0;
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
@@ -396,10 +382,7 @@ function draw() {
     }
   }
 
-  // remove dead tendrils
-  tendrils = tendrils.filter(t => !t.dead);
-
-  // explosion effect
+  // Explosion effect
   if (explosionTimer > 0) {
     drawExplosion();
     explosionTimer -= deltaTime;
@@ -418,7 +401,6 @@ function windowResized() {
 // -------------------------------------------------------------------
 function createHUD_Bottom() {
   controlPanel = createDiv();
-  // position absolute at bottom
   controlPanel.style("position", "absolute");
   controlPanel.style("bottom", "0");
   controlPanel.style("left", "0");
@@ -458,6 +440,7 @@ function createHUD_Bottom() {
     if (novaCooldown <= 0) {
       triggerNovaManual();
       novaCooldown = NOVA_COOLDOWN_TIME;
+      novaTimer = 0;  // Reset the Nova meter on press
     }
   });
 
@@ -529,12 +512,14 @@ function createHUD_Bottom() {
   novaMeter.attribute("min", "0");
   novaMeter.attribute("max", NOVA_THRESHOLD.toString());
   novaMeter.attribute("value", "0");
+  novaMeter.addClass("cyanMeter");
 
   novaCooldownMeter = createElement('meter');
   novaCooldownMeter.parent(row4);
   novaCooldownMeter.attribute("min", "0");
   novaCooldownMeter.attribute("max", NOVA_COOLDOWN_TIME.toString());
   novaCooldownMeter.attribute("value", "0");
+  novaCooldownMeter.addClass("cyanMeter");
 
   // Row 5: Hunt & Abyss
   let row5 = createDiv();
@@ -550,12 +535,14 @@ function createHUD_Bottom() {
   huntMeter.attribute("min", "0");
   huntMeter.attribute("max", HUNT_THRESHOLD.toString());
   huntMeter.attribute("value", "0");
+  huntMeter.addClass("desatpurple");
 
   abyssMeter = createElement('meter');
   abyssMeter.parent(row5);
   abyssMeter.attribute("min", "0");
   abyssMeter.attribute("max", ABSYSS_THRESHOLD.toString());
   abyssMeter.attribute("value", "0");
+  abyssMeter.addClass("desatpurple");
 
   // Row 6: Walls On/Off | D-Pad | size presets
   let row6 = createDiv();
@@ -684,14 +671,11 @@ function spawnTendrils(n = 1) {
 
 // Use finalSpeed in draw
 function handleKeyboard(finalSpeed) {
-  // This function is now passed finalSpeed from draw
-  // But we still read the arrow keys. We'll apply finalSpeed as the movement rate.
   if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= finalSpeed;
   if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += finalSpeed;
   if (keyIsDown(UP_ARROW) || keyIsDown(87)) singularity.pos.y -= finalSpeed;
   if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) singularity.pos.y += finalSpeed;
 
-  // clamp to canvas
   singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
   singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
 }
@@ -711,7 +695,6 @@ function triggerHunt() {
 }
 
 function triggerRepel() {
-  // repel if in orbit
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
     if (d < ORBIT_DISTANCE) {
@@ -734,6 +717,7 @@ function triggerNovaManual() {
   }
   explosionType = "nova";
   explosionTimer = 500;
+  novaTimer = 0; // reset Nova meter on manual trigger
 }
 
 function triggerNovaBurst() {
@@ -754,7 +738,6 @@ function triggerNovaBurst() {
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
-    // if x < 30% => D-Pad
     if (t.x < width * 0.3) {
       dPadActive = true;
     } else {
@@ -765,8 +748,7 @@ function touchStarted() {
 }
 
 function touchMoved() {
-  // We'll apply final speed in draw, so let's do nothing special here
-  // or we can do a direct movement if we want. But let's keep it minimal
+  // Minimal touch handling; movement is applied in draw.
 }
 
 function touchEnded() {
