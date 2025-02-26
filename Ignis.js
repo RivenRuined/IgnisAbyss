@@ -1,23 +1,19 @@
-console.log("Ignis.js loaded and running!!");
+console.log("Ignis.js loaded and running!!!");
 
 /*
   Ignis x Abyss – Life x Death
 
-  Features:
-  1) Auto screen sizing (default).
-  2) Four preset size buttons: PC, Mobile, Tablet, plus an "Auto" revert.
-  3) Walls On/Off toggle: if walls are on, tendrils bounce off edges.
-  4) Single Speed slider (combined from old Speed & Movement).
-  5) Orbit Slowing: if enough tendrils orbit, singularity's speed goes down.
-  6) If speed hits 0 due to orbit, the singularity is "stuck" until a Burst or Nova frees them.
-
-  Layout:
-    Row 1: [Spawn | Hunt | Burst | Nova]
-    Row 2: [Agro Slider | Gravity Slider | Speed Slider]
-    Row 3: [Agro Label | Gravity Label | Speed Label]
-    Row 4: [Nova Meter | Nova Cooldown Meter]
-    Row 5: [Hunt Meter | Abyss Meter]
-    Row 6: [Walls On/Off | D-Pad | PC | Mobile | Auto | Tablet]
+  Changes per request:
+  1) HUD at the bottom of the screen (absolute bottom).
+  2) Single Speed slider, no orbit-based slowdown. 
+     Instead, tie speed to Singularity's health state:
+       - healthy (gold) => speed = slider value
+       - assimilating (pink) => speed = slider value * 0.5
+       - dead (black) => speed = 0
+  3) Walls On/Off button toggles tendril bounces.
+  4) Four screen-size preset buttons + Auto.
+  5) 3+ tendrils in orbit => assimilation. 
+     Pink => eventually black => no movement => eventually gold => normal again.
 */
 
 // -------------------------------------------------------------------
@@ -30,10 +26,10 @@ class Singularity {
     this.baseRadius = 15;
     this.radius = this.baseRadius;
     this.pulseSpeed = 0.05;
-    this.state = "healthy";
+    this.state = "healthy"; // healthy | assimilating | dead
     this.assimilationTimer = 0;
     this.respawnTimer = 0;
-    this.currentColor = color(255,215,0);
+    this.currentColor = color(255,215,0); // gold
   }
 
   update() {
@@ -49,11 +45,14 @@ class Singularity {
         let u = (p - 0.5) / 0.5;
         this.currentColor = lerpColor(baseColor, color(255,0,255), u);
       } else {
+        // assimilation triggered
         this.state = "assimilating";
         this.assimilationTimer = 0;
         this.currentColor = color(255,0,255);
       }
-    } else if (this.state === "assimilating") {
+    } 
+    else if (this.state === "assimilating") {
+      // Pink => eventually black => dead
       this.assimilationTimer += deltaTime;
       if (this.assimilationTimer < 2000) {
         let t = this.assimilationTimer / 2000;
@@ -63,7 +62,9 @@ class Singularity {
         this.respawnTimer = 0;
         this.currentColor = color(0,0,0);
       }
-    } else if (this.state === "dead") {
+    } 
+    else if (this.state === "dead") {
+      // black => eventually gold again
       this.respawnTimer += deltaTime;
       if (this.respawnTimer > 7000) {
         this.state = "healthy";
@@ -89,6 +90,7 @@ class Singularity {
 
 class Tendril {
   constructor() {
+    // spawn from an edge
     let edge = floor(random(4));
     if (edge === 0) {
       this.pos = createVector(random(width), 0);
@@ -122,6 +124,7 @@ class Tendril {
   }
 
   orbit(targetPos, pullStrength) {
+    // standard orbit code
     let desired = p5.Vector.sub(targetPos, this.pos);
     let tangent = createVector(-desired.y, desired.x);
     tangent.normalize();
@@ -142,12 +145,16 @@ class Tendril {
     if (!simulationRunning) return;
 
     if (this.immolating) {
+      // dying
       this.immolateTimer += deltaTime;
       if (this.immolateTimer > this.immolateDuration) {
         this.dead = true;
       }
-    } else {
+    } 
+    else {
+      // normal movement
       let simSpeed = agroSlider.value();
+      // if far from singularity, add a slight pull
       let d = p5.Vector.dist(this.pos, singularity.pos);
       if (d > ORBIT_DISTANCE) {
         let baseForce = p5.Vector.sub(singularity.pos, this.pos);
@@ -165,7 +172,7 @@ class Tendril {
       this.pos.add(this.vel);
       this.acc.mult(0);
 
-      // If wallsOn is true, bounce off edges
+      // bounce if wallsOn
       if (wallsOn) {
         if (this.pos.x < 0) {
           this.pos.x = 0;
@@ -186,6 +193,7 @@ class Tendril {
       }
     }
 
+    // tail
     this.tail.push(this.pos.copy());
     if (this.tail.length > this.tailMax) {
       this.tail.shift();
@@ -253,9 +261,6 @@ let tendrils = [];
 let singularity;
 let simulationRunning = true;
 
-// p5 DOM references
-let container, cnv, controlPanel;
-
 // Sliders
 let agroSlider, gravitySlider, speedSlider;
 
@@ -266,58 +271,58 @@ let dPadActive = false;
 let touchStartX = 0;
 let touchStartY = 0;
 
-// Walls
+// Walls toggle
 let wallsOn = false;
+
+// Screen size modes
+let autoMode = true;
+
+// p5 DOM references
+let controlPanel, huntMeter, abyssMeter, novaMeter, novaCooldownMeter;
 
 // -------------------------------------------------------------------
 // 3) Setup & Draw
 // -------------------------------------------------------------------
 function setup() {
+  // assign colors
   purpleColor = color(130, 0, 130);
   cyanColor   = color(0, 255, 255);
   blackColor  = color(0, 0, 0);
 
-  // Use auto screen size by default
+  // auto screen by default
   createCanvas(windowWidth, windowHeight);
 
-  createHUD();
-
+  createHUD_Bottom();
   resetSimulation();
 }
 
 function draw() {
   background(0);
 
-  handleKeyboard();
-
-  // Count how many tendrils are in orbit
-  let countOrbit = 0;
-  for (let t of tendrils) {
-    let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE) countOrbit++;
-  }
-
-  // Orbit slowing: if tendrils are orbiting, reduce speed
-  // "speed" slider sets base speed, but if enough tendrils orbit, speed can go down to 0 => "stuck"
+  // 1) figure out singularity's current speed based on health state
   let baseSpeed = speedSlider.value();
-  let orbitSlow = countOrbit * 0.2; // each orbiting tendril reduces speed by 0.2
-  let finalSpeed = max(0, baseSpeed - orbitSlow);
-
-  // If finalSpeed is 0, the singularity is "stuck" unless player uses Burst or Nova
-  if (finalSpeed <= 0.001) {
-    // ignore keyboard movement or D-Pad movement
-    // we do nothing here, so the singularity won't move unless there's a burst or nova
-  } else {
-    // apply D-Pad movement
-    if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
-      singularity.pos.x += dPadDirection.x * finalSpeed;
-      singularity.pos.y += dPadDirection.y * finalSpeed;
-    }
-    // The handleKeyboard() call has already adjusted singularity for arrow keys,
-    // but we can also clamp it to finalSpeed. Let's do it in handleKeyboard() too.
+  let finalSpeed = 0;
+  if (singularity.state === "healthy") {
+    // gold
+    finalSpeed = baseSpeed;
+  } else if (singularity.state === "assimilating") {
+    // pink => half speed
+    finalSpeed = baseSpeed * 0.5;
+  } else if (singularity.state === "dead") {
+    // black => 0
+    finalSpeed = 0;
   }
 
-  // Timers
+  // 2) handle keyboard movement using finalSpeed
+  handleKeyboard(finalSpeed);
+
+  // 3) handle D-Pad using finalSpeed
+  if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
+    singularity.pos.x += dPadDirection.x * finalSpeed;
+    singularity.pos.y += dPadDirection.y * finalSpeed;
+  }
+
+  // timers
   spawnTimer += deltaTime;
   if (spawnTimer > SPAWN_INTERVAL) {
     spawnTendrils(10);
@@ -344,21 +349,27 @@ function draw() {
   }
   novaCooldownMeter.attribute("value", novaCooldown.toString());
 
+  // singularity update
   singularity.update();
   singularity.show();
 
+  // update & show tendrils
   for (let t of tendrils) {
-    // gravity pull
-    let gravPull = gravitySlider.value();
     let d = p5.Vector.dist(t.pos, singularity.pos);
     if (d < ORBIT_DISTANCE) {
+      let gravPull = gravitySlider.value();
       t.orbit(singularity.pos, gravPull);
     }
     t.update();
     t.show();
   }
 
-  // Assimilation logic
+  // assimilation logic
+  let countOrbit = 0;
+  for (let t of tendrils) {
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d < ORBIT_DISTANCE) countOrbit++;
+  }
   if (countOrbit >= 3 && singularity.state === "healthy") {
     abyssAccumulator += deltaTime;
   } else {
@@ -375,7 +386,6 @@ function draw() {
   }
   abyssMeter.attribute("value", abyssAccumulator.toString());
 
-  // Death burst chain
   if ((singularity.state === "assimilating" || singularity.state === "dead") && deathBurstCount > 0) {
     deathBurstTimer += deltaTime;
     if (deathBurstTimer >= deathBurstInterval) {
@@ -389,7 +399,7 @@ function draw() {
   // remove dead tendrils
   tendrils = tendrils.filter(t => !t.dead);
 
-  // Explosion effect
+  // explosion effect
   if (explosionTimer > 0) {
     drawExplosion();
     explosionTimer -= deltaTime;
@@ -397,7 +407,6 @@ function draw() {
 }
 
 function windowResized() {
-  // if "Auto" is chosen, we do this
   if (autoMode) {
     resizeCanvas(windowWidth, windowHeight);
     resetSimulation();
@@ -405,15 +414,13 @@ function windowResized() {
 }
 
 // -------------------------------------------------------------------
-// 4) HUD
+// 4) Create HUD at the bottom
 // -------------------------------------------------------------------
-let autoMode = true; // if true, we auto-resize
-
-function createHUD() {
-  // We'll create an absolute container on top
+function createHUD_Bottom() {
   controlPanel = createDiv();
+  // position absolute at bottom
   controlPanel.style("position", "absolute");
-  controlPanel.style("top", "0");
+  controlPanel.style("bottom", "0");
   controlPanel.style("left", "0");
   controlPanel.style("width", "100%");
   controlPanel.style("background", "black");
@@ -522,18 +529,12 @@ function createHUD() {
   novaMeter.attribute("min", "0");
   novaMeter.attribute("max", NOVA_THRESHOLD.toString());
   novaMeter.attribute("value", "0");
-  novaMeter.addClass("nova");
-  novaMeter.style("width", "200px");
-  novaMeter.style("height", "20px");
 
   novaCooldownMeter = createElement('meter');
   novaCooldownMeter.parent(row4);
   novaCooldownMeter.attribute("min", "0");
   novaCooldownMeter.attribute("max", NOVA_COOLDOWN_TIME.toString());
   novaCooldownMeter.attribute("value", "0");
-  novaCooldownMeter.addClass("novacooldown");
-  novaCooldownMeter.style("width", "200px");
-  novaCooldownMeter.style("height", "20px");
 
   // Row 5: Hunt & Abyss
   let row5 = createDiv();
@@ -549,27 +550,20 @@ function createHUD() {
   huntMeter.attribute("min", "0");
   huntMeter.attribute("max", HUNT_THRESHOLD.toString());
   huntMeter.attribute("value", "0");
-  huntMeter.addClass("hunt");
-  huntMeter.style("width", "200px");
-  huntMeter.style("height", "20px");
 
   abyssMeter = createElement('meter');
   abyssMeter.parent(row5);
   abyssMeter.attribute("min", "0");
   abyssMeter.attribute("max", ABSYSS_THRESHOLD.toString());
   abyssMeter.attribute("value", "0");
-  abyssMeter.addClass("abyss");
-  abyssMeter.style("width", "200px");
-  abyssMeter.style("height", "20px");
 
-  // Row 6: Walls On/Off | D-Pad | PC, Mobile, Auto, Tablet
+  // Row 6: Walls On/Off | D-Pad | size presets
   let row6 = createDiv();
   row6.parent(controlPanel);
   row6.style("display", "flex");
   row6.style("justify-content", "center");
   row6.style("align-items", "center");
   row6.style("gap", "10px");
-  row6.style("margin-bottom", "10px");
 
   let wallsBtn = createButton("Walls: OFF");
   wallsBtn.parent(row6);
@@ -656,7 +650,7 @@ function createHUD() {
 }
 
 // -------------------------------------------------------------------
-// 5) The rest of the game logic
+// 5) The rest of the logic
 // -------------------------------------------------------------------
 function resetSimulation() {
   simulationRunning = true;
@@ -688,15 +682,16 @@ function spawnTendrils(n = 1) {
   }
 }
 
-function handleKeyboard() {
-  // Even if orbit slowing sets final speed to 0, we still read keys here, 
-  // but the final speed will be clamped in draw if orbits are high.
-  let kbSpeed = speedSlider.value();
-  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= kbSpeed;
-  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += kbSpeed;
-  if (keyIsDown(UP_ARROW) || keyIsDown(87)) singularity.pos.y -= kbSpeed;
-  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) singularity.pos.y += kbSpeed;
+// Use finalSpeed in draw
+function handleKeyboard(finalSpeed) {
+  // This function is now passed finalSpeed from draw
+  // But we still read the arrow keys. We'll apply finalSpeed as the movement rate.
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= finalSpeed;
+  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += finalSpeed;
+  if (keyIsDown(UP_ARROW) || keyIsDown(87)) singularity.pos.y -= finalSpeed;
+  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) singularity.pos.y += finalSpeed;
 
+  // clamp to canvas
   singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
   singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
 }
@@ -710,10 +705,13 @@ function keyReleased() {
 }
 
 function triggerHunt() {
-  for (let t of tendrils) t.hunt(singularity.pos);
+  for (let t of tendrils) {
+    t.hunt(singularity.pos);
+  }
 }
 
 function triggerRepel() {
+  // repel if in orbit
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
     if (d < ORBIT_DISTANCE) {
@@ -730,7 +728,9 @@ function triggerRepel() {
 function triggerNovaManual() {
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE && !t.immolating) t.startImmolation();
+    if (d < ORBIT_DISTANCE && !t.immolating) {
+      t.startImmolation();
+    }
   }
   explosionType = "nova";
   explosionTimer = 500;
@@ -751,10 +751,10 @@ function triggerNovaBurst() {
   lastNovaTime = millis();
 }
 
-// Touch
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
+    // if x < 30% => D-Pad
     if (t.x < width * 0.3) {
       dPadActive = true;
     } else {
@@ -765,24 +765,8 @@ function touchStarted() {
 }
 
 function touchMoved() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    if (dPadActive) {
-      let dx = t.x - 80;
-      let dy = t.y - 820;
-      let factor = speedSlider.value();
-      singularity.pos.x += dx * factor;
-      singularity.pos.y += dy * factor;
-    } else {
-      let dx = t.x - touchStartX;
-      let dy = t.y - touchStartY;
-      let factor = speedSlider.value();
-      singularity.pos.x += dx * factor;
-      singularity.pos.y += dy * factor;
-      touchStartX = t.x;
-      touchStartY = t.y;
-    }
-  }
+  // We'll apply final speed in draw, so let's do nothing special here
+  // or we can do a direct movement if we want. But let's keep it minimal
 }
 
 function touchEnded() {
@@ -790,7 +774,6 @@ function touchEnded() {
 }
 
 function windowResized() {
-  // if auto mode is on, we resize & reset
   if (autoMode) {
     resizeCanvas(windowWidth, windowHeight);
     resetSimulation();
