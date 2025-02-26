@@ -3,15 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <title>Ignis x Abyss – Life x Death</title>
-  <!-- p5 libraries -->
+  <!-- Load p5 libraries in correct order -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/p5.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/addons/p5.dom.min.js"></script>
-  <!-- Our Ignis code -->
+  <!-- Our Ignis code (must come last, after p5) -->
   <script src="Ignis.js" defer></script>
 </head>
 <body style="margin:0; padding:0; background:black; color:white; text-align:center;">
   <h1>Ignis x Abyss – Life x Death</h1>
-  <p>Use arrow keys or WASD to move. Space=Burst | V=Nova</p>
-  <p>Agro/Gravity/Speed = numeric inputs for AI & keyboard. Movement = touch speed only.</p>
+  <p>Use arrow keys or WASD to move. Space = Burst | V = Nova</p>
+  <p>Agro, Gravity, Speed = numeric inputs (AI & keyboard). Movement = touch speed only.</p>
+  <!-- The p5 canvas and HUD appear below, inserted by Ignis.js -->
 </body>
 </html>
