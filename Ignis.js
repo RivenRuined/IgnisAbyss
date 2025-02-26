@@ -1,13 +1,9 @@
-console.log("Ignis.js loaded and running!!!");
+console.log("Ignis.js loaded and running!");
 
 /*
   Ignis x Abyss – Life x Death
-  Final version with:
-    - Sliders for Agro, Gravity, Speed, Movement
-    - No bounding checks or "return false" in touch events
-    - Control panel has higher z-index so sliders are clickable
-
-  This should fix "frames" error & freezing, letting the user drag sliders freely.
+  With sliders for Agro, Gravity, Speed, Movement
+  Colors assigned in setup() to avoid "levels" error.
 */
 
 // -------------------------------------------------------------------
@@ -233,10 +229,15 @@ let dPadActive = false;
 let touchStartX = 0;
 let touchStartY = 0;
 
-// -------------------------------------------------------------------
-// 3) Setup & Draw
-// -------------------------------------------------------------------
+// p5 DOM references
+let container, cnv, controlPanel;
+
 function setup() {
+  // *** Define the color variables so they're not undefined ***
+  purpleColor = color(130, 0, 130);
+  cyanColor   = color(0, 255, 255);
+  blackColor  = color(0, 0, 0);
+
   createContainerAndCanvas();
   createHUD();
   resetSimulation();
@@ -252,10 +253,6 @@ function draw() {
     singularity.pos.x += dPadDirection.x * touchSpeed;
     singularity.pos.y += dPadDirection.y * touchSpeed;
   }
-
-  let simSpeed = agroSlider.value();       // for Tendrils
-  let gravPull = gravitySlider.value();    // orbit pull
-  let kbSpeed = speedSlider.value();       // keyboard speed (we store in a local var if needed)
 
   spawnTimer += deltaTime;
   if (spawnTimer > SPAWN_INTERVAL) {
@@ -286,9 +283,9 @@ function draw() {
   singularity.update();
   singularity.show();
 
-  // Tendrils
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
+    let gravPull = gravitySlider.value();
     if (d < ORBIT_DISTANCE) {
       t.orbit(singularity.pos, gravPull);
     }
@@ -296,6 +293,7 @@ function draw() {
     t.show();
   }
 
+  // Count how many are in orbit
   let countOrbit = 0;
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
@@ -337,276 +335,8 @@ function draw() {
   }
 }
 
-// -------------------------------------------------------------------
-// 4) Setup Helpers
-// -------------------------------------------------------------------
-let container, cnv, controlPanel;
+// Helpers
 
-function createContainerAndCanvas() {
-  container = createDiv();
-  container.style("display", "flex");
-  container.style("flex-direction", "column");
-  container.style("align-items", "center");
-  container.style("margin", "0 auto");
-  container.style("padding", "0");
-  container.style("background-color", "#000");
-  container.style("width", "100%");
-  container.style("max-width", "100%");
-
-  cnv = createCanvas(1200, 900);
-  cnv.parent(container);
-
-  // Ensure canvas is behind the HUD, so sliders can be clicked
-  cnv.style("position", "relative");
-  cnv.style("z-index", "0");
-}
-
-function createHUD() {
-  controlPanel = createDiv();
-  controlPanel.parent(container);
-  controlPanel.style("background", "black");
-  controlPanel.style("color", "grey");
-  controlPanel.style("text-align", "center");
-  controlPanel.style("padding", "10px 0");
-  controlPanel.style("width", "100%");
-  controlPanel.style("max-width", "1200px");
-  controlPanel.style("font-family", "sans-serif");
-  // Put HUD above canvas
-  controlPanel.style("position", "relative");
-  controlPanel.style("z-index", "9999");
-  controlPanel.style("pointer-events", "auto");
-
-  createRow1_Buttons();
-  createRow2_Sliders();
-  createRow3_Labels();
-  createRow4_NovaMeters();
-  createRow5_HuntAbyss();
-  createRow6_DPad();
-}
-
-function createRow1_Buttons() {
-  let row = createDiv();
-  row.parent(controlPanel);
-  row.style("display", "flex");
-  row.style("justify-content", "center");
-  row.style("align-items", "center");
-  row.style("gap", "10px");
-  row.style("margin-bottom", "10px");
-
-  spawnBtn = createButton("Spawn");
-  spawnBtn.parent(row);
-  spawnBtn.mousePressed(() => spawnTendrils(5));
-
-  huntBtn = createButton("Hunt");
-  huntBtn.parent(row);
-  huntBtn.mousePressed(triggerHunt);
-
-  burstBtn = createButton("Burst");
-  burstBtn.parent(row);
-  burstBtn.mousePressed(triggerRepel);
-
-  novaBtn = createButton("Nova");
-  novaBtn.parent(row);
-  novaBtn.mousePressed(() => {
-    if (novaCooldown <= 0) {
-      triggerNovaManual();
-      novaCooldown = NOVA_COOLDOWN_TIME;
-    }
-  });
-
-  [spawnBtn, huntBtn, burstBtn, novaBtn].forEach(btn => {
-    btn.style("font-size", "18px");
-    btn.style("background-color", "#202325");
-    btn.style("color", "#9C89B8");
-    btn.style("padding", "5px 10px");
-    btn.style("pointer-events", "auto");
-    btn.style("z-index", "9999");
-  });
-  burstBtn.style("color", "#00FFFF");
-  novaBtn.style("color", "#00FFFF");
-}
-
-function createRow2_Sliders() {
-  let row = createDiv();
-  row.parent(controlPanel);
-  row.style("display", "flex");
-  row.style("justify-content", "center");
-  row.style("align-items", "center");
-  row.style("gap", "20px");
-  row.style("margin-bottom", "5px");
-
-  agroSlider = createSlider(0, 5, 1.7, 0.1);
-  agroSlider.parent(row);
-  agroSlider.style("width", "120px");
-  agroSlider.style("z-index", "9999");
-
-  gravitySlider = createSlider(0, 5, 1.5, 0.1);
-  gravitySlider.parent(row);
-  gravitySlider.style("width", "120px");
-  gravitySlider.style("z-index", "9999");
-
-  speedSlider = createSlider(0, 5, 1.95, 0.1);
-  speedSlider.parent(row);
-  speedSlider.style("width", "120px");
-  speedSlider.style("z-index", "9999");
-
-  movementSlider = createSlider(0, 5, 1.0, 0.1);
-  movementSlider.parent(row);
-  movementSlider.style("width", "120px");
-  movementSlider.style("z-index", "9999");
-}
-
-function createRow3_Labels() {
-  let row = createDiv();
-  row.parent(controlPanel);
-  row.style("display", "flex");
-  row.style("justify-content", "center");
-  row.style("align-items", "center");
-  row.style("gap", "60px");
-  row.style("margin-bottom", "10px");
-
-  let agroLabel = createSpan("Agro");
-  agroLabel.parent(row);
-  agroLabel.style("font-size", "14px");
-  agroLabel.style("color", "#CCCCCC");
-
-  let gravLabel = createSpan("Gravity");
-  gravLabel.parent(row);
-  gravLabel.style("font-size", "14px");
-  gravLabel.style("color", "#CCCCCC");
-
-  let spdLabel = createSpan("Speed");
-  spdLabel.parent(row);
-  spdLabel.style("font-size", "14px");
-  spdLabel.style("color", "#CCCCCC");
-
-  let moveLabel = createSpan("Movement");
-  moveLabel.parent(row);
-  moveLabel.style("font-size", "14px");
-  moveLabel.style("color", "#CCCCCC");
-}
-
-function createRow4_NovaMeters() {
-  let row = createDiv();
-  row.parent(controlPanel);
-  row.style("display", "flex");
-  row.style("justify-content", "center");
-  row.style("align-items", "center");
-  row.style("gap", "20px");
-  row.style("margin-bottom", "5px");
-
-  novaMeter = createElement('meter');
-  novaMeter.parent(row);
-  novaMeter.attribute("min", "0");
-  novaMeter.attribute("max", NOVA_THRESHOLD.toString());
-  novaMeter.attribute("value", "0");
-  novaMeter.addClass("nova");
-  novaMeter.style("width", "200px");
-  novaMeter.style("height", "20px");
-  novaMeter.style("z-index", "9999");
-
-  novaCooldownMeter = createElement('meter');
-  novaCooldownMeter.parent(row);
-  novaCooldownMeter.attribute("min", "0");
-  novaCooldownMeter.attribute("max", NOVA_COOLDOWN_TIME.toString());
-  novaCooldownMeter.attribute("value", "0");
-  novaCooldownMeter.addClass("novacooldown");
-  novaCooldownMeter.style("width", "200px");
-  novaCooldownMeter.style("height", "20px");
-  novaCooldownMeter.style("z-index", "9999");
-}
-
-function createRow5_HuntAbyss() {
-  let row = createDiv();
-  row.parent(controlPanel);
-  row.style("display", "flex");
-  row.style("justify-content", "center");
-  row.style("align-items", "center");
-  row.style("gap", "20px");
-  row.style("margin-bottom", "10px");
-
-  huntMeter = createElement('meter');
-  huntMeter.parent(row);
-  huntMeter.attribute("min", "0");
-  huntMeter.attribute("max", HUNT_THRESHOLD.toString());
-  huntMeter.attribute("value", "0");
-  huntMeter.addClass("hunt");
-  huntMeter.style("width", "200px");
-  huntMeter.style("height", "20px");
-  huntMeter.style("z-index", "9999");
-
-  abyssMeter = createElement('meter');
-  abyssMeter.parent(row);
-  abyssMeter.attribute("min", "0");
-  abyssMeter.attribute("max", ABSYSS_THRESHOLD.toString());
-  abyssMeter.attribute("value", "0");
-  abyssMeter.addClass("abyss");
-  abyssMeter.style("width", "200px");
-  abyssMeter.style("height", "20px");
-  abyssMeter.style("z-index", "9999");
-}
-
-function createRow6_DPad() {
-  let row = createDiv();
-  row.parent(controlPanel);
-  row.style("display", "flex");
-  row.style("flex-direction", "column");
-  row.style("align-items", "center");
-  row.style("gap", "5px");
-  row.style("margin-bottom", "10px");
-  row.style("z-index", "9999");
-
-  // Up
-  let dPadRow1 = createDiv();
-  dPadRow1.parent(row);
-  dPadRow1.style("display", "flex");
-  dPadRow1.style("justify-content", "center");
-  dPadUp = createButton("↑");
-  dPadUp.parent(dPadRow1);
-  dPadUp.style("font-size", "18px");
-  dPadUp.style("padding", "5px 10px");
-  dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
-  dPadUp.mouseReleased(() => { dPadDirection.y = 0; });
-
-  // Left & Right
-  let dPadRow2 = createDiv();
-  dPadRow2.parent(row);
-  dPadRow2.style("display", "flex");
-  dPadRow2.style("justify-content", "space-between");
-  dPadRow2.style("width", "100px");
-
-  dPadLeft = createButton("←");
-  dPadLeft.parent(dPadRow2);
-  dPadLeft.style("font-size", "18px");
-  dPadLeft.style("padding", "5px 10px");
-  dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
-  dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
-
-  dPadRight = createButton("→");
-  dPadRight.parent(dPadRow2);
-  dPadRight.style("font-size", "18px");
-  dPadRight.style("padding", "5px 10px");
-  dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
-  dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
-
-  // Down
-  let dPadRow3 = createDiv();
-  dPadRow3.parent(row);
-  dPadRow3.style("display", "flex");
-  dPadRow3.style("justify-content", "center");
-  dPadDown = createButton("↓");
-  dPadDown.parent(dPadRow3);
-  dPadDown.style("font-size", "18px");
-  dPadDown.style("padding", "5px 10px");
-  dPadDown.mousePressed(() => { dPadDirection.set(dPadDirection.x, 1); });
-  dPadDown.mouseReleased(() => { dPadDirection.y = 0; });
-
-  dPadDirection = createVector(0, 0);
-}
-
-// -------------------------------------------------------------------
-// 5) The rest of the game logic
-// -------------------------------------------------------------------
 function resetSimulation() {
   simulationRunning = true;
   explosionTimer = 0;
@@ -638,7 +368,6 @@ function spawnTendrils(n = 1) {
 }
 
 function handleKeyboard() {
-  // "Speed" slider for keyboard movement
   let kbSpeed = speedSlider.value();
   if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= kbSpeed;
   if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += kbSpeed;
@@ -650,16 +379,17 @@ function handleKeyboard() {
 }
 
 function keyReleased() {
-  if (keyCode === 32) triggerRepel();       // SPACE
-  if (keyCode === 86 && novaCooldown <= 0) { // V
+  if (keyCode === 32) triggerRepel();
+  if (keyCode === 86 && novaCooldown <= 0) {
     triggerNovaManual();
     novaCooldown = NOVA_COOLDOWN_TIME;
   }
 }
 
-// Buttons
 function triggerHunt() {
-  for (let t of tendrils) t.hunt(singularity.pos);
+  for (let t of tendrils) {
+    t.hunt(singularity.pos);
+  }
 }
 
 function triggerRepel() {
@@ -679,7 +409,9 @@ function triggerRepel() {
 function triggerNovaManual() {
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE && !t.immolating) t.startImmolation();
+    if (d < ORBIT_DISTANCE && !t.immolating) {
+      t.startImmolation();
+    }
   }
   explosionType = "nova";
   explosionTimer = 500;
@@ -700,11 +432,9 @@ function triggerNovaBurst() {
   lastNovaTime = millis();
 }
 
-// Touch
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
-    // No bounding checks or "return false"—so no p5 "frames" error
     // If x < 30% => D-Pad
     if (t.x < width * 0.3) {
       dPadActive = true;
@@ -740,7 +470,6 @@ function touchEnded() {
   dPadActive = false;
 }
 
-// Explosion
 function drawExplosion() {
   push();
   translate(singularity.pos.x, singularity.pos.y);
