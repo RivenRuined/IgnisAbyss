@@ -5,18 +5,19 @@ console.log("Ignis.js loaded and running!!!");
 
   Changes:
   1) HUD at the bottom with Walls toggle and Screen Presets.
-  2) Controls: WSAD/Arrow keys/Touchscreen (D‑Pad present).
+  2) Controls: WSAD/Arrow keys and touchscreen (with touchMoved code) enabled.
   3) Automatic Nova Pulses:
-       - Auto Nova Pulse every ~3 seconds: kills up to 3 tendrils in orbit.
-       - SuperNova every ~10 seconds: kills all tendrils in orbit, with a larger explosion.
-  4) Meter styling:
-       - Auto Nova and SuperNova meters (cyan, with empty gauge black).
-       - Hunt/Assimilation meters (desaturated purple, empty gauge black).
+       - Auto Nova Pulse every ~3 sec: kills up to 3 tendrils in orbit.
+       - SuperNova every ~10 sec: kills all tendrils in orbit (bigger explosion).
+  4) Meter styling: 
+       - Auto Nova/SuperNova meters (cyan fill over black bar).
+       - Hunt/Assimilation meters (desaturated purple fill over black bar).
+  5) When manual Nova is triggered via button, novaTimer resets.
 */
 
-// Global constants for nova thresholds (in milliseconds)
-const AUTO_NOVA_THRESHOLD = 3000;   // Auto Nova pulse every 3 sec
-const SUPERNOVA_THRESHOLD = 10000;  // SuperNova every 10 sec
+// Global constants for nova thresholds (in ms)
+const AUTO_NOVA_THRESHOLD = 3000;    // Auto Nova pulse every 3 sec
+const SUPERNOVA_THRESHOLD = 10000;   // SuperNova every 10 sec
 
 // -------------------------------------------------------------------
 // 1) Classes
@@ -52,8 +53,8 @@ class Singularity {
         this.assimilationTimer = 0;
         this.currentColor = color(255,0,255);
       }
-    } else if (this.state === "assimilating") {
-      // Transition from pink to black => dead
+    } 
+    else if (this.state === "assimilating") {
       this.assimilationTimer += deltaTime;
       if (this.assimilationTimer < 2000) {
         let t = this.assimilationTimer / 2000;
@@ -63,8 +64,8 @@ class Singularity {
         this.respawnTimer = 0;
         this.currentColor = color(0,0,0);
       }
-    } else if (this.state === "dead") {
-      // Recover to healthy after 7 sec
+    } 
+    else if (this.state === "dead") {
       this.respawnTimer += deltaTime;
       if (this.respawnTimer > 7000) {
         this.state = "healthy";
@@ -90,7 +91,6 @@ class Singularity {
 
 class Tendril {
   constructor() {
-    // Spawn from a random edge
     let edge = floor(random(4));
     if (edge === 0) {
       this.pos = createVector(random(width), 0);
@@ -227,12 +227,12 @@ let ORBIT_DISTANCE = 50;
 let ABSYSS_THRESHOLD = 13000;
 let HUNT_THRESHOLD = 5000;
 
-let autoNovaTimer = 0;   // auto Nova pulse timer (3 sec)
-let superNovaTimer = 0;  // SuperNova timer (10 sec)
+let autoNovaTimer = 0;   // auto Nova pulse timer (~3 sec)
+let superNovaTimer = 0;  // SuperNova timer (~10 sec)
 
 let huntTimer = 0;
 let abyssAccumulator = 0;
-let novaCooldown = 0; // (unused now)
+let novaCooldown = 0; // (unused)
 
 let spawnTimer = 0;
 let SPAWN_INTERVAL = 5000;
@@ -250,7 +250,7 @@ let singularity;
 let simulationRunning = true;
 
 // Sliders
-let agroSlider, gravitySlider, speedSlider;
+let agroSlider, gravitySlider, speedSlider, movementSlider;
 
 // D-Pad
 let dPadUp, dPadDown, dPadLeft, dPadRight;
@@ -265,7 +265,7 @@ let wallsOn = false;
 // Screen size modes
 let autoMode = true;
 
-// p5 DOM references (HUD elements)
+// p5 DOM references (HUD)
 let controlPanel, huntMeter, abyssMeter, autoNovaMeter, superNovaMeter;
 
 // -------------------------------------------------------------------
@@ -283,21 +283,23 @@ function setup() {
 function draw() {
   background(0);
 
-  // Update auto Nova and SuperNova timers
+  // Auto Nova: every ~3 sec
   autoNovaTimer += deltaTime;
   if (autoNovaTimer >= AUTO_NOVA_THRESHOLD) {
     triggerAutoNovaPulse();
     autoNovaTimer = 0;
   }
+  autoNovaMeter.attribute("value", autoNovaTimer.toString());
+
+  // SuperNova: every ~10 sec
   superNovaTimer += deltaTime;
   if (superNovaTimer >= SUPERNOVA_THRESHOLD) {
     triggerSuperNova();
     superNovaTimer = 0;
   }
-  autoNovaMeter.attribute("value", autoNovaTimer.toString());
   superNovaMeter.attribute("value", superNovaTimer.toString());
 
-  // Update Hunt timer
+  // Hunt timer update
   huntTimer += deltaTime;
   if (huntTimer >= HUNT_THRESHOLD) {
     triggerHunt();
@@ -305,7 +307,7 @@ function draw() {
   }
   huntMeter.attribute("value", huntTimer.toString());
 
-  // Update Abyss (Assimilation) meter
+  // Abyss (Assimilation) meter update
   if (getOrbitCount() >= 3 && singularity.state === "healthy") {
     abyssAccumulator += deltaTime;
   } else {
@@ -379,7 +381,7 @@ function createHUD_Bottom() {
   controlPanel.style("z-index", "9999");
   controlPanel.parent(document.body);
 
-  // Row 1: Buttons (Spawn, Hunt, Burst, Manual Nova trigger)
+  // Row 1: Buttons (Spawn, Hunt, Burst, Manual Nova)
   let row1 = createDiv();
   row1.parent(controlPanel);
   row1.style("display", "flex");
@@ -402,7 +404,6 @@ function createHUD_Bottom() {
 
   let novaBtn = createButton("Nova");
   novaBtn.parent(row1);
-  // Manual Nova trigger (if desired) resets autoNovaTimer
   novaBtn.mousePressed(() => {
     triggerNovaManual();
     autoNovaTimer = 0;
@@ -417,7 +418,7 @@ function createHUD_Bottom() {
   burstBtn.style("color", "#00FFFF");
   novaBtn.style("color", "#00FFFF");
 
-  // Row 2: Sliders
+  // Row 2: Sliders (Agro, Gravity, Speed)
   let row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
@@ -438,7 +439,7 @@ function createHUD_Bottom() {
   speedSlider.parent(row2);
   speedSlider.style("width", "120px");
 
-  // Row 3: Labels
+  // Row 3: Labels for sliders
   let row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
@@ -462,7 +463,7 @@ function createHUD_Bottom() {
   spdLabel.style("font-size", "14px");
   spdLabel.style("color", "#CCCCCC");
 
-  // Row 4: Auto Nova and SuperNova meters (both cyan)
+  // Row 4: Auto Nova and SuperNova meters (cyan)
   let row4 = createDiv();
   row4.parent(controlPanel);
   row4.style("display", "flex");
@@ -471,21 +472,19 @@ function createHUD_Bottom() {
   row4.style("gap", "20px");
   row4.style("margin-bottom", "5px");
 
-  novaMeter = createElement('meter');
-  novaMeter.parent(row4);
-  novaMeter.attribute("min", "0");
-  novaMeter.attribute("max", AUTO_NOVA_THRESHOLD.toString());
-  novaMeter.attribute("value", "0");
-  novaMeter.addClass("cyanMeter");
-  autoNovaMeter = novaMeter; // Auto Nova meter
+  autoNovaMeter = createElement('meter');
+  autoNovaMeter.parent(row4);
+  autoNovaMeter.attribute("min", "0");
+  autoNovaMeter.attribute("max", AUTO_NOVA_THRESHOLD.toString());
+  autoNovaMeter.attribute("value", "0");
+  autoNovaMeter.addClass("cyanMeter");
 
-  novaCooldownMeter = createElement('meter');
-  novaCooldownMeter.parent(row4);
-  novaCooldownMeter.attribute("min", "0");
-  novaCooldownMeter.attribute("max", SUPERNOVA_THRESHOLD.toString());
-  novaCooldownMeter.attribute("value", "0");
-  novaCooldownMeter.addClass("cyanMeter");
-  superNovaMeter = novaCooldownMeter; // SuperNova meter
+  superNovaMeter = createElement('meter');
+  superNovaMeter.parent(row4);
+  superNovaMeter.attribute("min", "0");
+  superNovaMeter.attribute("max", SUPERNOVA_THRESHOLD.toString());
+  superNovaMeter.attribute("value", "0");
+  superNovaMeter.addClass("cyanMeter");
 
   // Row 5: Hunt & Abyss meters (desat purple)
   let row5 = createDiv();
@@ -672,7 +671,7 @@ function triggerRepel() {
 }
 
 function triggerNovaManual() {
-  // Manual Nova: kill all tendrils in orbit (like SuperNova)
+  // Manual Nova (SuperNova behavior): kill all tendrils in orbit
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
     if (d < ORBIT_DISTANCE && !t.immolating) {
@@ -737,7 +736,26 @@ function touchStarted() {
 }
 
 function touchMoved() {
-  // Minimal touch handling
+  // Re-add touch movement for touchscreen control:
+  if (touches.length > 0) {
+    let t = touches[0];
+    if (dPadActive) {
+      let dx = t.x - 80;
+      let dy = t.y - 820;
+      let factor = movementSlider.value();
+      singularity.pos.x += dx * factor;
+      singularity.pos.y += dy * factor;
+    } else {
+      let dx = t.x - touchStartX;
+      let dy = t.y - touchStartY;
+      let factor = movementSlider.value();
+      singularity.pos.x += dx * factor;
+      singularity.pos.y += dy * factor;
+      touchStartX = t.x;
+      touchStartY = t.y;
+    }
+  }
+  return false;
 }
 
 function touchEnded() {
