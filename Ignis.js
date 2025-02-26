@@ -3,18 +3,10 @@ console.log("Ignis.js loaded and running!");
 /* 
   Ignis x Abyss – Life x Death
 
-  Updates per instructions:
-  1) D-Pad is centered below the meters (Row 6), no longer off to the side.
-  2) New "Movement" numeric input to control touch movement speed only (keyboard speed still uses "Speed").
-  3) Buttons (Spawn, Hunt, Burst, Nova) now use mousePressed, which in p5.js also responds to touchscreen taps.
-
-  HUD Layout:
-    Row 1: [Spawn | Hunt | Burst | Nova]
-    Row 2: [Agro Input | Gravity Input | Speed Input | Movement Input]
-    Row 3: [Agro | Gravity | Speed | Movement]
-    Row 4: [Nova Meter | Nova Cooldown Meter]
-    Row 5: [Hunt Meter | Abyss Meter]
-    Row 6: [D-Pad Controls (Up, Left, Right, Down)]
+  Fixes:
+  1) Buttons & number inputs are fully clickable on mobile/desktop:
+     - Higher z-index, pointer-events=auto for controlPanel & each element.
+  2) D-Pad is centered below the meters (Row 6).
 */
 
 // ---------------- Global Constants & Variables ----------------
@@ -60,9 +52,7 @@ let row1, row2, row3, row4, row5, row6;
 let spawnBtn, huntBtn, burstBtn, novaBtn;
 
 // Numeric inputs (HUD)
-let agroInput, gravityInput, speedInput, movementInput; 
-// "agro" replaced "aggression", 
-// "movement" is for touch only
+let agroInput, gravityInput, speedInput, movementInput;
 
 // Meters (HUD)
 let novaMeter, novaCooldownMeter, huntMeter, abyssMeter;
@@ -92,6 +82,12 @@ function setup() {
   // Create the canvas
   cnv = createCanvas(1200, 900);
   cnv.parent(container);
+
+  // Ensure canvas is behind the HUD
+  cnv.style("position", "relative");
+  cnv.style("z-index", "0");
+  // If needed, you could do cnv.style("pointer-events","none"); 
+  // but that would disable canvas-based touch. We'll keep it as is.
 
   // Define colors
   purpleColor = color(130, 0, 130);
@@ -128,6 +124,11 @@ function setup() {
   controlPanel.style("max-width", "1200px");
   controlPanel.style("font-family", "sans-serif");
 
+  // Put the HUD above the canvas
+  controlPanel.style("position", "relative");
+  controlPanel.style("z-index", "9999");
+  controlPanel.style("pointer-events", "auto");
+
   // ---------------- Row 1: Buttons ----------------
   row1 = createDiv();
   row1.parent(controlPanel);
@@ -139,34 +140,38 @@ function setup() {
 
   spawnBtn = createButton("Spawn");
   spawnBtn.parent(row1);
-  spawnBtn.mousePressed(() => spawnTendrils(5));
 
   huntBtn = createButton("Hunt");
   huntBtn.parent(row1);
-  huntBtn.mousePressed(triggerHunt);
 
   burstBtn = createButton("Burst");
   burstBtn.parent(row1);
-  burstBtn.mousePressed(triggerRepel);
 
   novaBtn = createButton("Nova");
   novaBtn.parent(row1);
+
+  // For each button, ensure pointer-events are enabled and z-index is high
+  [spawnBtn, huntBtn, burstBtn, novaBtn].forEach(btn => {
+    btn.style("font-size", "18px");
+    btn.style("background-color", "#202325");
+    btn.style("color", "#9C89B8");
+    btn.style("padding", "5px 10px");
+    btn.style("pointer-events", "auto");
+    btn.style("z-index", "9999");
+  });
+  burstBtn.style("color", "#00FFFF");
+  novaBtn.style("color", "#00FFFF");
+
+  // Add mousePressed (which also works for taps in p5)
+  spawnBtn.mousePressed(() => spawnTendrils(5));
+  huntBtn.mousePressed(triggerHunt);
+  burstBtn.mousePressed(triggerRepel);
   novaBtn.mousePressed(() => {
     if (novaCooldown <= 0) {
       triggerNovaManual();
       novaCooldown = NOVA_COOLDOWN_TIME;
     }
   });
-
-  [spawnBtn, huntBtn, burstBtn, novaBtn].forEach(btn => {
-    btn.style("font-size", "18px");
-    btn.style("background-color", "#202325");
-    btn.style("color", "#9C89B8");
-    btn.style("padding", "5px 10px");
-  });
-  // Special color for Burst & Nova
-  burstBtn.style("color", "#00FFFF");
-  novaBtn.style("color", "#00FFFF");
 
   // ---------------- Row 2: Numeric Inputs (Agro, Gravity, Speed, Movement) ----------------
   row2 = createDiv();
@@ -182,26 +187,32 @@ function setup() {
   agroInput.style("font-size", "18px");
   agroInput.style("width", "60px");
   agroInput.style("text-align", "center");
+  agroInput.style("pointer-events", "auto");
+  agroInput.style("z-index", "9999");
 
   gravityInput = createInput('1.5', 'number');
   gravityInput.parent(row2);
   gravityInput.style("font-size", "18px");
   gravityInput.style("width", "60px");
   gravityInput.style("text-align", "center");
+  gravityInput.style("pointer-events", "auto");
+  gravityInput.style("z-index", "9999");
 
   speedInput = createInput('1.95', 'number'); 
-  // Speed for keyboard
   speedInput.parent(row2);
   speedInput.style("font-size", "18px");
   speedInput.style("width", "60px");
   speedInput.style("text-align", "center");
+  speedInput.style("pointer-events", "auto");
+  speedInput.style("z-index", "9999");
 
   movementInput = createInput('1.0', 'number'); 
-  // Movement for touch only
   movementInput.parent(row2);
   movementInput.style("font-size", "18px");
   movementInput.style("width", "60px");
   movementInput.style("text-align", "center");
+  movementInput.style("pointer-events", "auto");
+  movementInput.style("z-index", "9999");
 
   // ---------------- Row 3: Labels (Agro, Gravity, Speed, Movement) ----------------
   row3 = createDiv();
@@ -249,6 +260,8 @@ function setup() {
   novaMeter.addClass("nova");
   novaMeter.style("width", "200px");
   novaMeter.style("height", "20px");
+  novaMeter.style("pointer-events", "auto");
+  novaMeter.style("z-index", "9999");
 
   novaCooldownMeter = createElement('meter');
   novaCooldownMeter.parent(row4);
@@ -258,6 +271,8 @@ function setup() {
   novaCooldownMeter.addClass("novacooldown");
   novaCooldownMeter.style("width", "200px");
   novaCooldownMeter.style("height", "20px");
+  novaCooldownMeter.style("pointer-events", "auto");
+  novaCooldownMeter.style("z-index", "9999");
 
   // ---------------- Row 5: Meters (Hunt, Abyss) ----------------
   row5 = createDiv();
@@ -276,6 +291,8 @@ function setup() {
   huntMeter.addClass("hunt");
   huntMeter.style("width", "200px");
   huntMeter.style("height", "20px");
+  huntMeter.style("pointer-events", "auto");
+  huntMeter.style("z-index", "9999");
 
   abyssMeter = createElement('meter');
   abyssMeter.parent(row5);
@@ -285,8 +302,10 @@ function setup() {
   abyssMeter.addClass("abyss");
   abyssMeter.style("width", "200px");
   abyssMeter.style("height", "20px");
+  abyssMeter.style("pointer-events", "auto");
+  abyssMeter.style("z-index", "9999");
 
-  // ---------------- Row 6: D-Pad (Centered Below Meters) ----------------
+  // ---------------- Row 6: D-Pad (Centered) ----------------
   row6 = createDiv();
   row6.parent(controlPanel);
   row6.style("display", "flex");
@@ -294,17 +313,20 @@ function setup() {
   row6.style("align-items", "center");
   row6.style("gap", "5px");
   row6.style("margin-bottom", "10px");
+  row6.style("pointer-events", "auto");
+  row6.style("z-index", "9999");
 
   // Row 6.1: Up
   let dPadRow1 = createDiv();
   dPadRow1.parent(row6);
   dPadRow1.style("display", "flex");
   dPadRow1.style("justify-content", "center");
-
   dPadUp = createButton("↑");
   dPadUp.parent(dPadRow1);
   dPadUp.style("font-size", "18px");
   dPadUp.style("padding", "5px 10px");
+  dPadUp.style("pointer-events", "auto");
+  dPadUp.style("z-index", "9999");
   dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
   dPadUp.mouseReleased(() => { dPadDirection.y = 0; });
 
@@ -313,12 +335,14 @@ function setup() {
   dPadRow2.parent(row6);
   dPadRow2.style("display", "flex");
   dPadRow2.style("justify-content", "space-between");
-  dPadRow2.style("width", "100px"); // ensures left & right are spaced
+  dPadRow2.style("width", "100px");
 
   dPadLeft = createButton("←");
   dPadLeft.parent(dPadRow2);
   dPadLeft.style("font-size", "18px");
   dPadLeft.style("padding", "5px 10px");
+  dPadLeft.style("pointer-events", "auto");
+  dPadLeft.style("z-index", "9999");
   dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
   dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
 
@@ -326,6 +350,8 @@ function setup() {
   dPadRight.parent(dPadRow2);
   dPadRight.style("font-size", "18px");
   dPadRight.style("padding", "5px 10px");
+  dPadRight.style("pointer-events", "auto");
+  dPadRight.style("z-index", "9999");
   dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
   dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
 
@@ -339,10 +365,11 @@ function setup() {
   dPadDown.parent(dPadRow3);
   dPadDown.style("font-size", "18px");
   dPadDown.style("padding", "5px 10px");
+  dPadDown.style("pointer-events", "auto");
+  dPadDown.style("z-index", "9999");
   dPadDown.mousePressed(() => { dPadDirection.set(dPadDirection.x, 1); });
   dPadDown.mouseReleased(() => { dPadDirection.y = 0; });
 
-  // Initialize the dPadDirection
   dPadDirection = createVector(0, 0);
 
   // Start the simulation
@@ -420,7 +447,7 @@ function triggerRepel() {
     }
   }
   explosionType = "burst";
-  explosionTimer = explosionDuration;
+  explosionTimer = 500;
 }
 
 function triggerNovaManual() {
@@ -431,7 +458,7 @@ function triggerNovaManual() {
     }
   }
   explosionType = "nova";
-  explosionTimer = explosionDuration;
+  explosionTimer = 500;
 }
 
 function triggerNovaBurst() {
@@ -445,7 +472,7 @@ function triggerNovaBurst() {
     }
   }
   explosionType = "nova";
-  explosionTimer = explosionDuration;
+  explosionTimer = 500;
   lastNovaTime = millis();
 }
 
@@ -462,7 +489,6 @@ function draw() {
     singularity.pos.y += dPadDirection.y * touchSpeed;
   }
 
-  // Timers & logic
   let simSpeed = parseFloat(agroInput.value());   // Affects Tendril movement
   let gravPull = parseFloat(gravityInput.value());
 
@@ -521,7 +547,7 @@ function draw() {
     singularity.assimilationTimer = 0;
     abyssAccumulator = 0;
     explosionType = "death";
-    explosionTimer = explosionDuration;
+    explosionTimer = 500;
     deathBurstCount = 5;
     deathBurstTimer = 0;
   }
@@ -532,7 +558,7 @@ function draw() {
     deathBurstTimer += deltaTime;
     if (deathBurstTimer >= deathBurstInterval) {
       explosionType = "death";
-      explosionTimer = explosionDuration;
+      explosionTimer = 500;
       deathBurstTimer = 0;
       deathBurstCount--;
     }
@@ -553,12 +579,8 @@ function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
     // If touch begins in left 30% of canvas, consider d-pad area
-    // (Though we placed the D-Pad in row6, let's keep this check minimal)
-    if (t.x < width * 0.3) {
-      // We won't do a radius check now since it's below meters
-      // but you can adapt if needed
-      dPadActive = true;
-    } else {
+    dPadActive = (t.x < width * 0.3);
+    if (!dPadActive) {
       touchStartX = t.x;
       touchStartY = t.y;
     }
@@ -569,9 +591,9 @@ function touchStarted() {
 function touchMoved() {
   if (touches.length > 0) {
     let t = touches[0];
-    // If the user is not using the D-Pad, we do swipe-based movement
+    // If not using the D-Pad, do swipe-based movement
     if (!dPadActive) {
-      let factor = parseFloat(movementInput.value()); // Movement for swipes
+      let factor = parseFloat(movementInput.value());
       let dx = t.x - touchStartX;
       let dy = t.y - touchStartY;
       singularity.pos.x += dx * factor;
@@ -711,9 +733,7 @@ class Tendril {
         this.dead = true;
       }
     } else {
-      // Movement speed is influenced by "Agro"
-      let simSpeed = parseFloat(agroInput.value());
-
+      let simSpeed = parseFloat(agroInput.value()); // Affects Tendril movement
       let d = p5.Vector.dist(this.pos, singularity.pos);
       if (d > ORBIT_DISTANCE) {
         let baseForce = p5.Vector.sub(singularity.pos, this.pos);
