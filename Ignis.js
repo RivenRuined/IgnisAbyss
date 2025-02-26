@@ -2,17 +2,15 @@ console.log("Ignis.js loaded and running!");
 
 /*
   Ignis x Abyss – Life x Death
-  Minimal final version
+  Final version using sliders for Agro, Gravity, Speed, Movement
 
-  - "Agro" = old "Aggression"
-  - "Gravity", "Speed" for keyboard & AI
-  - "Movement" for touchscreen swipes
-  - D-Pad (Up, Left/Right, Down) uses mousePressed() for taps
-  - Only processes swipes if (touch.x,y) is inside the canvas
+  - Sliders are easier to tap on mobile.
+  - D-Pad uses mousePressed() for up/down/left/right.
+  - Touch swipes only move the character if inside the canvas region.
 */
 
 // -------------------------------------------------------------------
-// 1) Classes declared FIRST, so nothing references Singularity too early
+// 1) Classes declared FIRST
 // -------------------------------------------------------------------
 
 class Singularity {
@@ -138,7 +136,7 @@ class Tendril {
         this.dead = true;
       }
     } else {
-      let simSpeed = parseFloat(agroInput.value()); // "Agro" input
+      let simSpeed = agroSlider.value(); // "Agro" slider
       let d = p5.Vector.dist(this.pos, singularity.pos);
       if (d > ORBIT_DISTANCE) {
         let baseForce = p5.Vector.sub(singularity.pos, this.pos);
@@ -157,7 +155,6 @@ class Tendril {
       this.acc.mult(0);
     }
 
-    // Tail
     this.tail.push(this.pos.copy());
     if (this.tail.length > this.tailMax) {
       this.tail.shift();
@@ -196,14 +193,14 @@ class Tendril {
 }
 
 // -------------------------------------------------------------------
-// 2) Global Constants & Variables (No references to Singularity here)
+// 2) Global Variables
 // -------------------------------------------------------------------
-const TENDRIL_COUNT = 20;
-const ORBIT_DISTANCE = 50;
-const NOVA_THRESHOLD = 3500;
-const ABSYSS_THRESHOLD = 13000;
-const HUNT_THRESHOLD = 5000;
-const NOVA_COOLDOWN_TIME = 10000;
+let TENDRIL_COUNT = 20;
+let ORBIT_DISTANCE = 50;
+let NOVA_THRESHOLD = 3500;
+let ABSYSS_THRESHOLD = 13000;
+let HUNT_THRESHOLD = 5000;
+let NOVA_COOLDOWN_TIME = 10000;
 
 let novaTimer = 0;
 let huntTimer = 0;
@@ -211,10 +208,10 @@ let abyssAccumulator = 0;
 let novaCooldown = 0;
 
 let spawnTimer = 0;
-const SPAWN_INTERVAL = 5000;
+let SPAWN_INTERVAL = 5000;
 let lastNovaTime = 0;
 let explosionTimer = 0;
-const explosionDuration = 500;
+let explosionDuration = 500;
 let explosionType = "none";
 
 let deathBurstCount = 0;
@@ -226,12 +223,15 @@ let tendrils = [];
 let singularity;
 let simulationRunning = true;
 
+// p5 DOM references for Sliders
+let agroSlider, gravitySlider, speedSlider, movementSlider;
+
 // -------------------------------------------------------------------
-// 3) p5 Setup & Draw
+// 3) Setup & Draw
 // -------------------------------------------------------------------
 function setup() {
-  createMainContainerAndCanvas(); // see function below
-  createHUD();                    // sets up rows & inputs
+  createContainerAndCanvas();
+  createHUD();
   resetSimulation();
 }
 
@@ -239,15 +239,16 @@ function draw() {
   background(0);
   handleKeyboard();
 
-  // D-Pad movement
+  // D-Pad movement (Movement slider for touch speed)
   if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
-    let touchSpeed = parseFloat(movementInput.value());
+    let touchSpeed = movementSlider.value();
     singularity.pos.x += dPadDirection.x * touchSpeed;
     singularity.pos.y += dPadDirection.y * touchSpeed;
   }
 
-  let simSpeed = parseFloat(agroInput.value());
-  let gravPull = parseFloat(gravityInput.value());
+  let simSpeed = agroSlider.value();     // for Tendrils
+  let gravPull = gravitySlider.value();  // orbit pull
+  moveSpeed = speedSlider.value();       // keyboard speed
 
   spawnTimer += deltaTime;
   if (spawnTimer > SPAWN_INTERVAL) {
@@ -286,7 +287,7 @@ function draw() {
     t.show();
   }
 
-  // Count how many are in orbit
+  // Count how many in orbit
   let countOrbit = 0;
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
@@ -310,7 +311,6 @@ function draw() {
   }
   abyssMeter.attribute("value", abyssAccumulator.toString());
 
-  // Death burst chain
   if ((singularity.state === "assimilating" || singularity.state === "dead") && deathBurstCount > 0) {
     deathBurstTimer += deltaTime;
     if (deathBurstTimer >= deathBurstInterval) {
@@ -333,7 +333,7 @@ function draw() {
 // -------------------------------------------------------------------
 // 4) Setup Helpers
 // -------------------------------------------------------------------
-function createMainContainerAndCanvas() {
+function createContainerAndCanvas() {
   container = createDiv();
   container.style("display", "flex");
   container.style("flex-direction", "column");
@@ -360,7 +360,7 @@ function createHUD() {
   controlPanel.style("font-family", "sans-serif");
 
   createRow1_Buttons();
-  createRow2_Inputs();
+  createRow2_Sliders();
   createRow3_Labels();
   createRow4_NovaMeters();
   createRow5_HuntAbyss();
@@ -407,7 +407,7 @@ function createRow1_Buttons() {
   novaBtn.style("color", "#00FFFF");
 }
 
-function createRow2_Inputs() {
+function createRow2_Sliders() {
   let row = createDiv();
   row.parent(controlPanel);
   row.style("display", "flex");
@@ -416,29 +416,25 @@ function createRow2_Inputs() {
   row.style("gap", "20px");
   row.style("margin-bottom", "5px");
 
-  agroInput = createInput('1.7', 'number');
-  agroInput.parent(row);
-  agroInput.style("font-size", "18px");
-  agroInput.style("width", "60px");
-  agroInput.style("text-align", "center");
+  // Agro slider
+  agroSlider = createSlider(0, 5, 1.7, 0.1);
+  agroSlider.parent(row);
+  agroSlider.style("width", "120px");
 
-  gravityInput = createInput('1.5', 'number');
-  gravityInput.parent(row);
-  gravityInput.style("font-size", "18px");
-  gravityInput.style("width", "60px");
-  gravityInput.style("text-align", "center");
+  // Gravity slider
+  gravitySlider = createSlider(0, 5, 1.5, 0.1);
+  gravitySlider.parent(row);
+  gravitySlider.style("width", "120px");
 
-  speedInput = createInput('1.95', 'number');
-  speedInput.parent(row);
-  speedInput.style("font-size", "18px");
-  speedInput.style("width", "60px");
-  speedInput.style("text-align", "center");
+  // Speed slider (keyboard)
+  speedSlider = createSlider(0, 5, 1.95, 0.1);
+  speedSlider.parent(row);
+  speedSlider.style("width", "120px");
 
-  movementInput = createInput('1.0', 'number');
-  movementInput.parent(row);
-  movementInput.style("font-size", "18px");
-  movementInput.style("width", "60px");
-  movementInput.style("text-align", "center");
+  // Movement slider (touch)
+  movementSlider = createSlider(0, 5, 1.0, 0.1);
+  movementSlider.parent(row);
+  movementSlider.style("width", "120px");
 }
 
 function createRow3_Labels() {
@@ -587,7 +583,6 @@ function createRow6_DPad() {
 // -------------------------------------------------------------------
 // 5) The rest of the game logic
 // -------------------------------------------------------------------
-
 function resetSimulation() {
   simulationRunning = true;
   explosionTimer = 0;
@@ -619,7 +614,8 @@ function spawnTendrils(n = 1) {
 }
 
 function handleKeyboard() {
-  moveSpeed = parseFloat(speedInput.value());
+  // "Speed" slider for keyboard movement
+  moveSpeed = speedSlider.value();
   if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= moveSpeed;
   if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += moveSpeed;
   if (keyIsDown(UP_ARROW) || keyIsDown(87)) singularity.pos.y -= moveSpeed;
@@ -653,7 +649,7 @@ function triggerRepel() {
     }
   }
   explosionType = "burst";
-  explosionTimer = explosionDuration;
+  explosionTimer = 500;
 }
 
 function triggerNovaManual() {
@@ -662,7 +658,7 @@ function triggerNovaManual() {
     if (d < ORBIT_DISTANCE && !t.immolating) t.startImmolation();
   }
   explosionType = "nova";
-  explosionTimer = explosionDuration;
+  explosionTimer = 500;
 }
 
 function triggerNovaBurst() {
@@ -676,7 +672,7 @@ function triggerNovaBurst() {
     }
   }
   explosionType = "nova";
-  explosionTimer = explosionDuration;
+  explosionTimer = 500;
   lastNovaTime = millis();
 }
 
@@ -684,8 +680,9 @@ function triggerNovaBurst() {
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
-    // If outside the canvas, ignore
+    // If user tapped outside the canvas, do nothing
     if (t.x < 0 || t.x > width || t.y < 0 || t.y > height) return false;
+    // If x < 30% => D-Pad
     if (t.x < width * 0.3) {
       dPadActive = true;
     } else {
@@ -699,19 +696,20 @@ function touchStarted() {
 function touchMoved() {
   if (touches.length > 0) {
     let t = touches[0];
-    // If outside the canvas, ignore
     if (t.x < 0 || t.x > width || t.y < 0 || t.y > height) return false;
 
     if (dPadActive) {
+      // Move from an assumed center
       let dx = t.x - 80;
       let dy = t.y - 820;
-      let factor = parseFloat(movementInput.value());
+      let factor = movementSlider.value();
       singularity.pos.x += dx * factor;
       singularity.pos.y += dy * factor;
     } else {
+      // Swipe
       let dx = t.x - touchStartX;
       let dy = t.y - touchStartY;
-      let factor = parseFloat(movementInput.value());
+      let factor = movementSlider.value();
       singularity.pos.x += dx * factor;
       singularity.pos.y += dy * factor;
       touchStartX = t.x;
