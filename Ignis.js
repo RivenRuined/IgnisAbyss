@@ -1,20 +1,20 @@
 console.log("Ignis.js loaded and running!");
 
 /* 
-  Ignis.js
-  Final Version
+  Ignis x Abyss – Life x Death
+
+  Updates per instructions:
+  1) D-Pad is centered below the meters (Row 6), no longer off to the side.
+  2) New "Movement" numeric input to control touch movement speed only (keyboard speed still uses "Speed").
+  3) Buttons (Spawn, Hunt, Burst, Nova) now use mousePressed, which in p5.js also responds to touchscreen taps.
 
   HUD Layout:
-  - Row 1: [Spawn | Hunt | Burst | Nova]
-  - Row 2: [Agro Input | Gravity Input | Speed Input]
-  - Row 3: [Agro | Gravity | Speed]
-  - Row 4: [Nova Meter | Nova Cooldown Meter]
-  - Row 5: [Hunt Meter | Abyss Meter]
-
-  Changes:
-  - "Aggression" → "Agro"
-  - Faster touch movement (multiplier = 1.0)
-  - On-screen D-Pad for mobile
+    Row 1: [Spawn | Hunt | Burst | Nova]
+    Row 2: [Agro Input | Gravity Input | Speed Input | Movement Input]
+    Row 3: [Agro | Gravity | Speed | Movement]
+    Row 4: [Nova Meter | Nova Cooldown Meter]
+    Row 5: [Hunt Meter | Abyss Meter]
+    Row 6: [D-Pad Controls (Up, Left, Right, Down)]
 */
 
 // ---------------- Global Constants & Variables ----------------
@@ -45,7 +45,7 @@ let tendrils = [];
 let singularity;
 let simulationRunning = true;
 
-// Movement speed for the Singularity
+// Movement speed for keyboard
 let moveSpeed = 1.95;
 
 // p5 DOM elements
@@ -54,33 +54,31 @@ let cnv;
 let controlPanel;
 
 // Rows for HUD
-let row1, row2, row3, row4, row5;
+let row1, row2, row3, row4, row5, row6;
 
 // Buttons (HUD)
 let spawnBtn, huntBtn, burstBtn, novaBtn;
 
 // Numeric inputs (HUD)
-let agroInput, gravityInput, speedInput; // "Agro" is the renamed "Aggression"
+let agroInput, gravityInput, speedInput, movementInput; 
+// "agro" replaced "aggression", 
+// "movement" is for touch only
 
 // Meters (HUD)
 let novaMeter, novaCooldownMeter, huntMeter, abyssMeter;
 
-// ---------------- Touch Control Variables ----------------
-let dPadActive = false;
-let touchStartX = 0;
-let touchStartY = 0;
-let dPadCenterX = 80;  // Center for the virtual D-Pad (adjust as needed)
-let dPadCenterY = 820; // Adjust for your layout
-let dPadRadius = 50;
-
-// D-Pad on-screen buttons & direction
-let dPadContainer;
+// D-Pad references
 let dPadUp, dPadDown, dPadLeft, dPadRight;
 let dPadDirection; // p5.Vector for current D-Pad direction
 
+// Touch variables
+let dPadActive = false;
+let touchStartX = 0;
+let touchStartY = 0;
+
 // ---------------- Setup ----------------
 function setup() {
-  // Main container in normal document flow
+  // Main container
   container = createDiv();
   container.style("display", "flex");
   container.style("flex-direction", "column");
@@ -130,7 +128,7 @@ function setup() {
   controlPanel.style("max-width", "1200px");
   controlPanel.style("font-family", "sans-serif");
 
-  // Row 1: Buttons
+  // ---------------- Row 1: Buttons ----------------
   row1 = createDiv();
   row1.parent(controlPanel);
   row1.style("display", "flex");
@@ -166,10 +164,11 @@ function setup() {
     btn.style("color", "#9C89B8");
     btn.style("padding", "5px 10px");
   });
+  // Special color for Burst & Nova
   burstBtn.style("color", "#00FFFF");
   novaBtn.style("color", "#00FFFF");
 
-  // Row 2: Numeric Inputs (Agro, Gravity, Speed)
+  // ---------------- Row 2: Numeric Inputs (Agro, Gravity, Speed, Movement) ----------------
   row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
@@ -190,13 +189,21 @@ function setup() {
   gravityInput.style("width", "60px");
   gravityInput.style("text-align", "center");
 
-  speedInput = createInput('1.95', 'number');
+  speedInput = createInput('1.95', 'number'); 
+  // Speed for keyboard
   speedInput.parent(row2);
   speedInput.style("font-size", "18px");
   speedInput.style("width", "60px");
   speedInput.style("text-align", "center");
 
-  // Row 3: Labels (Agro, Gravity, Speed)
+  movementInput = createInput('1.0', 'number'); 
+  // Movement for touch only
+  movementInput.parent(row2);
+  movementInput.style("font-size", "18px");
+  movementInput.style("width", "60px");
+  movementInput.style("text-align", "center");
+
+  // ---------------- Row 3: Labels (Agro, Gravity, Speed, Movement) ----------------
   row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
@@ -220,7 +227,12 @@ function setup() {
   spdLabel.style("font-size", "14px");
   spdLabel.style("color", "#CCCCCC");
 
-  // Row 4: Meters (Nova, Nova Cooldown)
+  let moveLabel = createSpan("Movement");
+  moveLabel.parent(row3);
+  moveLabel.style("font-size", "14px");
+  moveLabel.style("color", "#CCCCCC");
+
+  // ---------------- Row 4: Meters (Nova, Nova Cooldown) ----------------
   row4 = createDiv();
   row4.parent(controlPanel);
   row4.style("display", "flex");
@@ -247,13 +259,14 @@ function setup() {
   novaCooldownMeter.style("width", "200px");
   novaCooldownMeter.style("height", "20px");
 
-  // Row 5: Meters (Hunt, Abyss)
+  // ---------------- Row 5: Meters (Hunt, Abyss) ----------------
   row5 = createDiv();
   row5.parent(controlPanel);
   row5.style("display", "flex");
   row5.style("justify-content", "center");
   row5.style("align-items", "center");
   row5.style("gap", "20px");
+  row5.style("margin-bottom", "10px");
 
   huntMeter = createElement('meter');
   huntMeter.parent(row5);
@@ -273,10 +286,66 @@ function setup() {
   abyssMeter.style("width", "200px");
   abyssMeter.style("height", "20px");
 
-  // Create the D-Pad for mobile
-  createDPad();
+  // ---------------- Row 6: D-Pad (Centered Below Meters) ----------------
+  row6 = createDiv();
+  row6.parent(controlPanel);
+  row6.style("display", "flex");
+  row6.style("flex-direction", "column");
+  row6.style("align-items", "center");
+  row6.style("gap", "5px");
+  row6.style("margin-bottom", "10px");
 
-  // Initialize simulation
+  // Row 6.1: Up
+  let dPadRow1 = createDiv();
+  dPadRow1.parent(row6);
+  dPadRow1.style("display", "flex");
+  dPadRow1.style("justify-content", "center");
+
+  dPadUp = createButton("↑");
+  dPadUp.parent(dPadRow1);
+  dPadUp.style("font-size", "18px");
+  dPadUp.style("padding", "5px 10px");
+  dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
+  dPadUp.mouseReleased(() => { dPadDirection.y = 0; });
+
+  // Row 6.2: Left & Right
+  let dPadRow2 = createDiv();
+  dPadRow2.parent(row6);
+  dPadRow2.style("display", "flex");
+  dPadRow2.style("justify-content", "space-between");
+  dPadRow2.style("width", "100px"); // ensures left & right are spaced
+
+  dPadLeft = createButton("←");
+  dPadLeft.parent(dPadRow2);
+  dPadLeft.style("font-size", "18px");
+  dPadLeft.style("padding", "5px 10px");
+  dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
+  dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
+
+  dPadRight = createButton("→");
+  dPadRight.parent(dPadRow2);
+  dPadRight.style("font-size", "18px");
+  dPadRight.style("padding", "5px 10px");
+  dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
+  dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
+
+  // Row 6.3: Down
+  let dPadRow3 = createDiv();
+  dPadRow3.parent(row6);
+  dPadRow3.style("display", "flex");
+  dPadRow3.style("justify-content", "center");
+
+  dPadDown = createButton("↓");
+  dPadDown.parent(dPadRow3);
+  dPadDown.style("font-size", "18px");
+  dPadDown.style("padding", "5px 10px");
+  dPadDown.mousePressed(() => { dPadDirection.set(dPadDirection.x, 1); });
+  dPadDown.mouseReleased(() => { dPadDirection.y = 0; });
+
+  // Initialize the dPadDirection
+  dPadDirection = createVector(0, 0);
+
+  // Start the simulation
   resetSimulation();
 }
 
@@ -314,11 +383,13 @@ function spawnTendrils(n = 1) {
 
 // ---------------- Keyboard Control ----------------
 function handleKeyboard() {
+  // Keyboard movement speed is set by "Speed" input
   moveSpeed = parseFloat(speedInput.value());
   if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) { singularity.pos.x -= moveSpeed; }
   if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) { singularity.pos.x += moveSpeed; }
   if (keyIsDown(UP_ARROW) || keyIsDown(87)) { singularity.pos.y -= moveSpeed; }
   if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) { singularity.pos.y += moveSpeed; }
+
   singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
   singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
 }
@@ -349,7 +420,7 @@ function triggerRepel() {
     }
   }
   explosionType = "burst";
-  explosionTimer = 500;
+  explosionTimer = explosionDuration;
 }
 
 function triggerNovaManual() {
@@ -360,7 +431,7 @@ function triggerNovaManual() {
     }
   }
   explosionType = "nova";
-  explosionTimer = 500;
+  explosionTimer = explosionDuration;
 }
 
 function triggerNovaBurst() {
@@ -374,7 +445,7 @@ function triggerNovaBurst() {
     }
   }
   explosionType = "nova";
-  explosionTimer = 500;
+  explosionTimer = explosionDuration;
   lastNovaTime = millis();
 }
 
@@ -383,13 +454,16 @@ function draw() {
   background(0);
   handleKeyboard();
 
-  // D-Pad continuous movement
-  if (dPadDirection && (dPadDirection.x !== 0 || dPadDirection.y !== 0)) {
-    singularity.pos.x += dPadDirection.x * moveSpeed;
-    singularity.pos.y += dPadDirection.y * moveSpeed;
+  // D-Pad continuous movement 
+  // (keyboard uses "speedInput," but here we use "movementInput" for touch)
+  if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
+    let touchSpeed = parseFloat(movementInput.value()); // Movement for D-Pad
+    singularity.pos.x += dPadDirection.x * touchSpeed;
+    singularity.pos.y += dPadDirection.y * touchSpeed;
   }
 
-  let simSpeed = parseFloat(agroInput.value());
+  // Timers & logic
+  let simSpeed = parseFloat(agroInput.value());   // Affects Tendril movement
   let gravPull = parseFloat(gravityInput.value());
 
   spawnTimer += deltaTime;
@@ -447,7 +521,7 @@ function draw() {
     singularity.assimilationTimer = 0;
     abyssAccumulator = 0;
     explosionType = "death";
-    explosionTimer = 500;
+    explosionTimer = explosionDuration;
     deathBurstCount = 5;
     deathBurstTimer = 0;
   }
@@ -458,87 +532,32 @@ function draw() {
     deathBurstTimer += deltaTime;
     if (deathBurstTimer >= deathBurstInterval) {
       explosionType = "death";
-      explosionTimer = 500;
+      explosionTimer = explosionDuration;
       deathBurstTimer = 0;
       deathBurstCount--;
     }
   }
 
+  // Remove dead tendrils
   tendrils = tendrils.filter(t => !t.dead);
 
+  // Explosion effect
   if (explosionTimer > 0) {
     drawExplosion();
     explosionTimer -= deltaTime;
   }
 }
 
-// ---------------- D-Pad (On-Screen Buttons) ----------------
-function createDPad() {
-  dPadContainer = createDiv();
-  dPadContainer.parent(container);
-  dPadContainer.style("position", "absolute");
-  dPadContainer.style("bottom", "100px"); // Adjust as needed
-  dPadContainer.style("left", "10px");
-  dPadContainer.style("display", "flex");
-  dPadContainer.style("flex-direction", "column");
-  dPadContainer.style("align-items", "center");
-  dPadContainer.style("gap", "5px");
-
-  // Row 1: Up button
-  let dPadRow1 = createDiv();
-  dPadRow1.parent(dPadContainer);
-  dPadRow1.style("display", "flex");
-  dPadRow1.style("justify-content", "center");
-  dPadUp = createButton("↑");
-  dPadUp.parent(dPadRow1);
-  dPadUp.style("font-size", "18px");
-  dPadUp.style("padding", "5px 10px");
-  dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
-  dPadUp.mouseReleased(() => { dPadDirection.y = 0; });
-
-  // Row 2: Left and Right buttons
-  let dPadRow2 = createDiv();
-  dPadRow2.parent(dPadContainer);
-  dPadRow2.style("display", "flex");
-  dPadRow2.style("justify-content", "space-between");
-  dPadLeft = createButton("←");
-  dPadLeft.parent(dPadRow2);
-  dPadLeft.style("font-size", "18px");
-  dPadLeft.style("padding", "5px 10px");
-  dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
-  dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
-
-  dPadRight = createButton("→");
-  dPadRight.parent(dPadRow2);
-  dPadRight.style("font-size", "18px");
-  dPadRight.style("padding", "5px 10px");
-  dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
-  dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
-
-  // Row 3: Down button
-  let dPadRow3 = createDiv();
-  dPadRow3.parent(dPadContainer);
-  dPadRow3.style("display", "flex");
-  dPadRow3.style("justify-content", "center");
-  dPadDown = createButton("↓");
-  dPadDown.parent(dPadRow3);
-  dPadDown.style("font-size", "18px");
-  dPadDown.style("padding", "5px 10px");
-  dPadDown.mousePressed(() => { dPadDirection.set(dPadDirection.x, 1); });
-  dPadDown.mouseReleased(() => { dPadDirection.y = 0; });
-
-  dPadDirection = createVector(0, 0);
-}
-
-// ---------------- Touch Controls ----------------
+// ---------------- Touch & D-Pad Movement (Touch Only) ----------------
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
-    // If touch begins in left 30% of canvas, check for d-pad activation
+    // If touch begins in left 30% of canvas, consider d-pad area
+    // (Though we placed the D-Pad in row6, let's keep this check minimal)
     if (t.x < width * 0.3) {
-      if (dist(t.x, t.y, dPadCenterX, dPadCenterY) < dPadRadius) {
-        dPadActive = true;
-      }
+      // We won't do a radius check now since it's below meters
+      // but you can adapt if needed
+      dPadActive = true;
     } else {
       touchStartX = t.x;
       touchStartY = t.y;
@@ -550,17 +569,13 @@ function touchStarted() {
 function touchMoved() {
   if (touches.length > 0) {
     let t = touches[0];
-    if (dPadActive) {
-      let dx = t.x - dPadCenterX;
-      let dy = t.y - dPadCenterY;
-      // Moved from 0.05 to 1.0 for responsiveness
-      singularity.pos.x += dx * 1.0;
-      singularity.pos.y += dy * 1.0;
-    } else {
+    // If the user is not using the D-Pad, we do swipe-based movement
+    if (!dPadActive) {
+      let factor = parseFloat(movementInput.value()); // Movement for swipes
       let dx = t.x - touchStartX;
       let dy = t.y - touchStartY;
-      singularity.pos.x += dx * 1.0;
-      singularity.pos.y += dy * 1.0;
+      singularity.pos.x += dx * factor;
+      singularity.pos.y += dy * factor;
       touchStartX = t.x;
       touchStartY = t.y;
     }
@@ -573,7 +588,9 @@ function touchEnded() {
   return false;
 }
 
-// ---------------- Singularity Class ----------------
+// ---------------- Classes ----------------
+
+// Singularity
 class Singularity {
   constructor(x, y) {
     this.pos = createVector(x, y);
@@ -588,6 +605,7 @@ class Singularity {
 
   update() {
     if (this.state === "healthy") {
+      // Pulsate from gold to orange
       this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
       let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
       let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
@@ -636,7 +654,7 @@ class Singularity {
   }
 }
 
-// ---------------- Tendril Class ----------------
+// Tendril
 class Tendril {
   constructor() {
     let edge = floor(random(4));
@@ -664,7 +682,7 @@ class Tendril {
   }
 
   hunt(targetPos) {
-    this.boostTimer = 30;
+    this.boostTimer = 30; // short hunt boost
   }
 
   orbit(targetPos, pullStrength) {
@@ -693,6 +711,9 @@ class Tendril {
         this.dead = true;
       }
     } else {
+      // Movement speed is influenced by "Agro"
+      let simSpeed = parseFloat(agroInput.value());
+
       let d = p5.Vector.dist(this.pos, singularity.pos);
       if (d > ORBIT_DISTANCE) {
         let baseForce = p5.Vector.sub(singularity.pos, this.pos);
@@ -706,11 +727,12 @@ class Tendril {
         this.boostTimer--;
       }
       this.vel.add(this.acc);
-      this.vel.limit(this.maxSpeed * parseFloat(agroInput.value()));
+      this.vel.limit(this.maxSpeed * simSpeed);
       this.pos.add(this.vel);
       this.acc.mult(0);
     }
 
+    // Tail
     this.tail.push(this.pos.copy());
     if (this.tail.length > this.tailMax) {
       this.tail.shift();
@@ -721,6 +743,7 @@ class Tendril {
     noStroke();
     let drawColor;
     if (this.immolating) {
+      // fade from purple->cyan->black
       if (this.immolateTimer < this.immolateDuration / 2) {
         let amt = this.immolateTimer / (this.immolateDuration / 2);
         drawColor = lerpColor(purpleColor, cyanColor, amt);
@@ -747,7 +770,7 @@ class Tendril {
   }
 }
 
-// ---------------- Explosion Effect ----------------
+// Explosion
 function drawExplosion() {
   push();
   translate(singularity.pos.x, singularity.pos.y);
