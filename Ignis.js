@@ -1,16 +1,17 @@
-console.log("Ignis.js loaded and running!");
+console.log("Ignis.js loaded and running!!!");
 
 /*
   Ignis x Abyss – Life x Death
-  Final version using sliders for Agro, Gravity, Speed, Movement
+  Final version with:
+    - Sliders for Agro, Gravity, Speed, Movement
+    - No bounding checks or "return false" in touch events
+    - Control panel has higher z-index so sliders are clickable
 
-  - Sliders are easier to tap on mobile.
-  - D-Pad uses mousePressed() for up/down/left/right.
-  - Touch swipes only move the character if inside the canvas region.
+  This should fix "frames" error & freezing, letting the user drag sliders freely.
 */
 
 // -------------------------------------------------------------------
-// 1) Classes declared FIRST
+// 1) Classes FIRST
 // -------------------------------------------------------------------
 
 class Singularity {
@@ -27,7 +28,7 @@ class Singularity {
 
   update() {
     if (this.state === "healthy") {
-      // Pulsate color from gold to orange
+      // Pulsate from gold to orange
       this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
       let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
       let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
@@ -165,7 +166,6 @@ class Tendril {
     noStroke();
     let drawColor;
     if (this.immolating) {
-      // fade from purple->cyan->black
       if (this.immolateTimer < this.immolateDuration / 2) {
         let amt = this.immolateTimer / (this.immolateDuration / 2);
         drawColor = lerpColor(purpleColor, cyanColor, amt);
@@ -226,6 +226,13 @@ let simulationRunning = true;
 // p5 DOM references for Sliders
 let agroSlider, gravitySlider, speedSlider, movementSlider;
 
+// D-Pad
+let dPadUp, dPadDown, dPadLeft, dPadRight;
+let dPadDirection;
+let dPadActive = false;
+let touchStartX = 0;
+let touchStartY = 0;
+
 // -------------------------------------------------------------------
 // 3) Setup & Draw
 // -------------------------------------------------------------------
@@ -239,16 +246,16 @@ function draw() {
   background(0);
   handleKeyboard();
 
-  // D-Pad movement (Movement slider for touch speed)
+  // D-Pad movement
   if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
     let touchSpeed = movementSlider.value();
     singularity.pos.x += dPadDirection.x * touchSpeed;
     singularity.pos.y += dPadDirection.y * touchSpeed;
   }
 
-  let simSpeed = agroSlider.value();     // for Tendrils
-  let gravPull = gravitySlider.value();  // orbit pull
-  moveSpeed = speedSlider.value();       // keyboard speed
+  let simSpeed = agroSlider.value();       // for Tendrils
+  let gravPull = gravitySlider.value();    // orbit pull
+  let kbSpeed = speedSlider.value();       // keyboard speed (we store in a local var if needed)
 
   spawnTimer += deltaTime;
   if (spawnTimer > SPAWN_INTERVAL) {
@@ -282,12 +289,13 @@ function draw() {
   // Tendrils
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE) t.orbit(singularity.pos, gravPull);
+    if (d < ORBIT_DISTANCE) {
+      t.orbit(singularity.pos, gravPull);
+    }
     t.update();
     t.show();
   }
 
-  // Count how many in orbit
   let countOrbit = 0;
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
@@ -323,7 +331,6 @@ function draw() {
 
   tendrils = tendrils.filter(t => !t.dead);
 
-  // Explosion effect
   if (explosionTimer > 0) {
     drawExplosion();
     explosionTimer -= deltaTime;
@@ -333,6 +340,8 @@ function draw() {
 // -------------------------------------------------------------------
 // 4) Setup Helpers
 // -------------------------------------------------------------------
+let container, cnv, controlPanel;
+
 function createContainerAndCanvas() {
   container = createDiv();
   container.style("display", "flex");
@@ -346,6 +355,10 @@ function createContainerAndCanvas() {
 
   cnv = createCanvas(1200, 900);
   cnv.parent(container);
+
+  // Ensure canvas is behind the HUD, so sliders can be clicked
+  cnv.style("position", "relative");
+  cnv.style("z-index", "0");
 }
 
 function createHUD() {
@@ -358,6 +371,10 @@ function createHUD() {
   controlPanel.style("width", "100%");
   controlPanel.style("max-width", "1200px");
   controlPanel.style("font-family", "sans-serif");
+  // Put HUD above canvas
+  controlPanel.style("position", "relative");
+  controlPanel.style("z-index", "9999");
+  controlPanel.style("pointer-events", "auto");
 
   createRow1_Buttons();
   createRow2_Sliders();
@@ -402,6 +419,8 @@ function createRow1_Buttons() {
     btn.style("background-color", "#202325");
     btn.style("color", "#9C89B8");
     btn.style("padding", "5px 10px");
+    btn.style("pointer-events", "auto");
+    btn.style("z-index", "9999");
   });
   burstBtn.style("color", "#00FFFF");
   novaBtn.style("color", "#00FFFF");
@@ -416,25 +435,25 @@ function createRow2_Sliders() {
   row.style("gap", "20px");
   row.style("margin-bottom", "5px");
 
-  // Agro slider
   agroSlider = createSlider(0, 5, 1.7, 0.1);
   agroSlider.parent(row);
   agroSlider.style("width", "120px");
+  agroSlider.style("z-index", "9999");
 
-  // Gravity slider
   gravitySlider = createSlider(0, 5, 1.5, 0.1);
   gravitySlider.parent(row);
   gravitySlider.style("width", "120px");
+  gravitySlider.style("z-index", "9999");
 
-  // Speed slider (keyboard)
   speedSlider = createSlider(0, 5, 1.95, 0.1);
   speedSlider.parent(row);
   speedSlider.style("width", "120px");
+  speedSlider.style("z-index", "9999");
 
-  // Movement slider (touch)
   movementSlider = createSlider(0, 5, 1.0, 0.1);
   movementSlider.parent(row);
   movementSlider.style("width", "120px");
+  movementSlider.style("z-index", "9999");
 }
 
 function createRow3_Labels() {
@@ -484,6 +503,7 @@ function createRow4_NovaMeters() {
   novaMeter.addClass("nova");
   novaMeter.style("width", "200px");
   novaMeter.style("height", "20px");
+  novaMeter.style("z-index", "9999");
 
   novaCooldownMeter = createElement('meter');
   novaCooldownMeter.parent(row);
@@ -493,6 +513,7 @@ function createRow4_NovaMeters() {
   novaCooldownMeter.addClass("novacooldown");
   novaCooldownMeter.style("width", "200px");
   novaCooldownMeter.style("height", "20px");
+  novaCooldownMeter.style("z-index", "9999");
 }
 
 function createRow5_HuntAbyss() {
@@ -512,6 +533,7 @@ function createRow5_HuntAbyss() {
   huntMeter.addClass("hunt");
   huntMeter.style("width", "200px");
   huntMeter.style("height", "20px");
+  huntMeter.style("z-index", "9999");
 
   abyssMeter = createElement('meter');
   abyssMeter.parent(row);
@@ -521,6 +543,7 @@ function createRow5_HuntAbyss() {
   abyssMeter.addClass("abyss");
   abyssMeter.style("width", "200px");
   abyssMeter.style("height", "20px");
+  abyssMeter.style("z-index", "9999");
 }
 
 function createRow6_DPad() {
@@ -531,6 +554,7 @@ function createRow6_DPad() {
   row.style("align-items", "center");
   row.style("gap", "5px");
   row.style("margin-bottom", "10px");
+  row.style("z-index", "9999");
 
   // Up
   let dPadRow1 = createDiv();
@@ -615,11 +639,11 @@ function spawnTendrils(n = 1) {
 
 function handleKeyboard() {
   // "Speed" slider for keyboard movement
-  moveSpeed = speedSlider.value();
-  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= moveSpeed;
-  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += moveSpeed;
-  if (keyIsDown(UP_ARROW) || keyIsDown(87)) singularity.pos.y -= moveSpeed;
-  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) singularity.pos.y += moveSpeed;
+  let kbSpeed = speedSlider.value();
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= kbSpeed;
+  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += kbSpeed;
+  if (keyIsDown(UP_ARROW) || keyIsDown(87)) singularity.pos.y -= kbSpeed;
+  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) singularity.pos.y += kbSpeed;
 
   singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
   singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
@@ -680,8 +704,7 @@ function triggerNovaBurst() {
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
-    // If user tapped outside the canvas, do nothing
-    if (t.x < 0 || t.x > width || t.y < 0 || t.y > height) return false;
+    // No bounding checks or "return false"—so no p5 "frames" error
     // If x < 30% => D-Pad
     if (t.x < width * 0.3) {
       dPadActive = true;
@@ -690,23 +713,18 @@ function touchStarted() {
       touchStartY = t.y;
     }
   }
-  return false;
 }
 
 function touchMoved() {
   if (touches.length > 0) {
     let t = touches[0];
-    if (t.x < 0 || t.x > width || t.y < 0 || t.y > height) return false;
-
     if (dPadActive) {
-      // Move from an assumed center
       let dx = t.x - 80;
       let dy = t.y - 820;
       let factor = movementSlider.value();
       singularity.pos.x += dx * factor;
       singularity.pos.y += dy * factor;
     } else {
-      // Swipe
       let dx = t.x - touchStartX;
       let dy = t.y - touchStartY;
       let factor = movementSlider.value();
@@ -716,12 +734,10 @@ function touchMoved() {
       touchStartY = t.y;
     }
   }
-  return false;
 }
 
 function touchEnded() {
   dPadActive = false;
-  return false;
 }
 
 // Explosion
