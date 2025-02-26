@@ -1,4 +1,4 @@
-console.log("Ignis.js loaded and running!");
+console.log("Ignis.js loaded and running!!");
 
 /*
   Ignis x Abyss – Life x Death
