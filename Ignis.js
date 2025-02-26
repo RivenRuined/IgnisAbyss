@@ -1,19 +1,20 @@
-console.log("Ignis.js loaded and running!!!");
+console.log("Ignis.js loaded and running!");
 
 /*
   Ignis x Abyss – Life x Death
 
-  Changes per request:
-  1) HUD at the bottom of the screen (absolute bottom).
-  2) Single Speed slider, no orbit-based slowdown. 
-     Instead, tie speed to Singularity's health state:
-       - healthy (gold) => speed = slider value
-       - assimilating (pink) => speed = slider value * 0.5
-       - dead (black) => speed = 0
-  3) Walls On/Off button toggles tendril bounces.
-  4) Four screen-size preset buttons + Auto.
-  5) 3+ tendrils in orbit => assimilation. 
-     Pink => eventually black => no movement => eventually gold => normal again.
+  Four health states based on assimilation fraction:
+    0–50% => Gold  (full speed, color #FFD700)
+    50–75% => Pink  (0.75 speed, color #FF69B4)
+    75–100% => Purple (0.5 speed, color #800080)
+    100% => Black (0 speed, dead => after 7s => revert to gold => assimilation=0)
+
+  Also:
+  - HUD at bottom
+  - Single Speed slider
+  - Walls On/Off
+  - 4 screen-size presets + Auto
+  - D-Pad for movement
 */
 
 // -------------------------------------------------------------------
@@ -23,74 +24,34 @@ console.log("Ignis.js loaded and running!!!");
 class Singularity {
   constructor(x, y) {
     this.pos = createVector(x, y);
-    this.baseRadius = 15;
-    this.radius = this.baseRadius;
-    this.pulseSpeed = 0.05;
-    this.state = "healthy"; // healthy | assimilating | dead
-    this.assimilationTimer = 0;
-    this.respawnTimer = 0;
+    this.radius = 15;
+    this.colorState = "gold"; 
+    // colorState can be "gold","pink","purple","black"
     this.currentColor = color(255,215,0); // gold
+    this.deadTimer = 0; // if black => count 7s => revert
   }
 
   update() {
-    if (this.state === "healthy") {
-      // Pulsate from gold to orange
-      this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
-      let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
-      let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
-      let p = abyssAccumulator / ABSYSS_THRESHOLD;
-      if (p < 0.5) {
-        this.currentColor = baseColor;
-      } else if (p < 1) {
-        let u = (p - 0.5) / 0.5;
-        this.currentColor = lerpColor(baseColor, color(255,0,255), u);
-      } else {
-        // assimilation triggered
-        this.state = "assimilating";
-        this.assimilationTimer = 0;
-        this.currentColor = color(255,0,255);
-      }
-    } 
-    else if (this.state === "assimilating") {
-      // Pink => eventually black => dead
-      this.assimilationTimer += deltaTime;
-      if (this.assimilationTimer < 2000) {
-        let t = this.assimilationTimer / 2000;
-        this.currentColor = lerpColor(color(255,0,255), color(0,0,0), t);
-      } else {
-        this.state = "dead";
-        this.respawnTimer = 0;
-        this.currentColor = color(0,0,0);
-      }
-    } 
-    else if (this.state === "dead") {
-      // black => eventually gold again
-      this.respawnTimer += deltaTime;
-      if (this.respawnTimer > 7000) {
-        this.state = "healthy";
-        this.assimilationTimer = 0;
-        this.respawnTimer = 0;
-        abyssAccumulator = 0;
-        this.currentColor = color(255,215,0);
-      }
-    }
+    // We'll compute assimilation fraction in draw() & pass it to updateState(...)
+    // This class just shows the final color & position
   }
 
   show() {
     noStroke();
-    if (this.state === "dead") {
+    // if black => outline purple
+    if (this.colorState === "black") {
       stroke(255,0,255);
       strokeWeight(2);
     }
     fill(this.currentColor);
-    ellipse(this.pos.x, this.pos.y, this.radius * 2, this.radius * 2);
+    ellipse(this.pos.x, this.pos.y, this.radius*2, this.radius*2);
     noStroke();
   }
 }
 
 class Tendril {
   constructor() {
-    // spawn from an edge
+    // spawn from random edge
     let edge = floor(random(4));
     if (edge === 0) {
       this.pos = createVector(random(width), 0);
@@ -115,16 +76,15 @@ class Tendril {
 
   autoHunt(targetPos) {
     let force = p5.Vector.sub(targetPos, this.pos);
-    force.setMag(random(1, 2));
+    force.setMag(random(1,2));
     this.vel = force;
   }
 
   hunt(targetPos) {
-    this.boostTimer = 30; // short hunt boost
+    this.boostTimer = 30;
   }
 
   orbit(targetPos, pullStrength) {
-    // standard orbit code
     let desired = p5.Vector.sub(targetPos, this.pos);
     let tangent = createVector(-desired.y, desired.x);
     tangent.normalize();
@@ -150,11 +110,9 @@ class Tendril {
       if (this.immolateTimer > this.immolateDuration) {
         this.dead = true;
       }
-    } 
-    else {
-      // normal movement
-      let simSpeed = agroSlider.value();
-      // if far from singularity, add a slight pull
+    } else {
+      // normal
+      let simSpeed = agroSlider.value(); 
       let d = p5.Vector.dist(this.pos, singularity.pos);
       if (d > ORBIT_DISTANCE) {
         let baseForce = p5.Vector.sub(singularity.pos, this.pos);
@@ -205,25 +163,25 @@ class Tendril {
     let drawColor;
     if (this.immolating) {
       // fade from purple->cyan->black
-      if (this.immolateTimer < this.immolateDuration / 2) {
-        let amt = this.immolateTimer / (this.immolateDuration / 2);
+      if (this.immolateTimer < this.immolateDuration/2) {
+        let amt = this.immolateTimer/(this.immolateDuration/2);
         drawColor = lerpColor(purpleColor, cyanColor, amt);
       } else {
-        let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
+        let amt = (this.immolateTimer - this.immolateDuration/2)/(this.immolateDuration/2);
         drawColor = lerpColor(cyanColor, blackColor, amt);
       }
     } else {
-      drawColor = color(130, 0, 130);
+      drawColor = color(130,0,130);
     }
     fill(drawColor);
-    ellipse(this.pos.x, this.pos.y, 7, 7);
+    ellipse(this.pos.x, this.pos.y, 7,7);
 
     strokeWeight(1);
     noFill();
     beginShape();
-    for (let i = 0; i < this.tail.length; i++) {
+    for (let i=0; i<this.tail.length; i++){
       let pos = this.tail[i];
-      let alpha = map(i, 0, this.tail.length, 0, 255);
+      let alpha = map(i,0,this.tail.length,0,255);
       stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
       vertex(pos.x, pos.y);
     }
@@ -232,7 +190,7 @@ class Tendril {
 }
 
 // -------------------------------------------------------------------
-// 2) Global Variables
+// 2) Global Vars
 // -------------------------------------------------------------------
 let TENDRIL_COUNT = 20;
 let ORBIT_DISTANCE = 50;
@@ -243,7 +201,7 @@ let NOVA_COOLDOWN_TIME = 10000;
 
 let novaTimer = 0;
 let huntTimer = 0;
-let abyssAccumulator = 0;
+let abyssAccumulator = 0; 
 let novaCooldown = 0;
 
 let spawnTimer = 0;
@@ -264,32 +222,33 @@ let simulationRunning = true;
 // Sliders
 let agroSlider, gravitySlider, speedSlider;
 
+// Meters
+let huntMeter, abyssMeter, novaMeter, novaCooldownMeter;
+
 // D-Pad
 let dPadUp, dPadDown, dPadLeft, dPadRight;
 let dPadDirection;
 let dPadActive = false;
-let touchStartX = 0;
-let touchStartY = 0;
+let touchStartX=0, touchStartY=0;
 
-// Walls toggle
+// Walls
 let wallsOn = false;
 
-// Screen size modes
+// Screen modes
 let autoMode = true;
 
-// p5 DOM references
-let controlPanel, huntMeter, abyssMeter, novaMeter, novaCooldownMeter;
+// HUD container
+let controlPanel;
 
 // -------------------------------------------------------------------
 // 3) Setup & Draw
 // -------------------------------------------------------------------
 function setup() {
-  // assign colors
-  purpleColor = color(130, 0, 130);
-  cyanColor   = color(0, 255, 255);
-  blackColor  = color(0, 0, 0);
+  purpleColor = color(130,0,130);
+  cyanColor   = color(0,255,255);
+  blackColor  = color(0,0,0);
 
-  // auto screen by default
+  // auto by default
   createCanvas(windowWidth, windowHeight);
 
   createHUD_Bottom();
@@ -299,515 +258,540 @@ function setup() {
 function draw() {
   background(0);
 
-  // 1) figure out singularity's current speed based on health state
-  let baseSpeed = speedSlider.value();
-  let finalSpeed = 0;
-  if (singularity.state === "healthy") {
-    // gold
-    finalSpeed = baseSpeed;
-  } else if (singularity.state === "assimilating") {
-    // pink => half speed
-    finalSpeed = baseSpeed * 0.5;
-  } else if (singularity.state === "dead") {
-    // black => 0
-    finalSpeed = 0;
+  // compute assimilation fraction
+  let frac = abyssAccumulator / ABSYSS_THRESHOLD;
+  if (frac>1) frac=1;
+
+  // determine colorState & speedFactor based on fraction
+  let colorState;
+  let speedFactor=1;
+  if (frac < 0.5) {
+    colorState="gold";        // full speed
+    speedFactor=1;
+  } else if (frac < 0.75) {
+    colorState="pink";        // 0.75 speed
+    speedFactor=0.75;
+  } else if (frac < 1) {
+    colorState="purple";      // 0.5 speed
+    speedFactor=0.5;
+  } else {
+    colorState="black";       // 0 speed => dead
+    speedFactor=0;
   }
 
-  // 2) handle keyboard movement using finalSpeed
-  handleKeyboard(finalSpeed);
+  // if black => freeze => after 7s => revert fraction=0 => color=gold
+  if (colorState==="black") {
+    singularity.deadTimer += deltaTime;
+    if (singularity.deadTimer>7000) {
+      // revert to gold
+      assimilationReset();
+    }
+  } else {
+    // not black => reset deadTimer
+    singularity.deadTimer=0;
+  }
 
-  // 3) handle D-Pad using finalSpeed
-  if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
+  // set color & final speed
+  let finalSpeed=0;
+  let finalColor;
+  if (colorState==="gold") {
+    finalSpeed = speedSlider.value();
+    finalColor = color(255,215,0);  // gold
+  } else if (colorState==="pink") {
+    finalSpeed = speedSlider.value()*0.75;
+    finalColor = color(255,105,180); // pinkish
+  } else if (colorState==="purple") {
+    finalSpeed = speedSlider.value()*0.5;
+    finalColor = color(128,0,128); // purple
+  } else {
+    finalSpeed = 0;
+    finalColor = color(0,0,0); // black
+  }
+
+  // apply final speed to keyboard & D-Pad
+  handleKeyboard(finalSpeed);
+  if (dPadDirection.x!==0 || dPadDirection.y!==0) {
     singularity.pos.x += dPadDirection.x * finalSpeed;
     singularity.pos.y += dPadDirection.y * finalSpeed;
   }
 
-  // timers
-  spawnTimer += deltaTime;
-  if (spawnTimer > SPAWN_INTERVAL) {
+  // update singularity color
+  singularity.colorState=colorState;
+  singularity.currentColor=finalColor;
+
+  // spawn
+  spawnTimer+=deltaTime;
+  if (spawnTimer>SPAWN_INTERVAL) {
     spawnTendrils(10);
-    spawnTimer = 0;
+    spawnTimer=0;
   }
 
-  huntTimer += deltaTime;
-  if (huntTimer >= HUNT_THRESHOLD) {
+  // hunt
+  huntTimer+=deltaTime;
+  if (huntTimer>=HUNT_THRESHOLD) {
     triggerHunt();
-    huntTimer = 0;
+    huntTimer=0;
   }
   huntMeter.attribute("value", huntTimer.toString());
 
-  novaTimer += deltaTime;
-  if (novaTimer >= NOVA_THRESHOLD) {
+  // assimilation fraction => we only increment if >=3 tendrils in orbit
+  let countOrbit=0;
+  for (let t of tendrils) {
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d<ORBIT_DISTANCE) countOrbit++;
+  }
+  if (countOrbit>=3 && colorState!=="black") {
+    abyssAccumulator+=deltaTime;
+  } else if (colorState!=="black") {
+    // if not black => reset if <3 orbit
+    if (frac<1) abyssAccumulator=frac*ABSYSS_THRESHOLD; // keep fraction
+  }
+
+  if (novaTimer>=NOVA_THRESHOLD) {
     triggerNovaBurst();
-    novaTimer = 0;
+    novaTimer=0;
   }
-  novaMeter.attribute("value", novaTimer.toString());
+  novaTimer+=deltaTime;
+  novaMeter.attribute("value",novaTimer.toString());
 
-  if (novaCooldown > 0) {
-    novaCooldown -= deltaTime;
-    if (novaCooldown < 0) novaCooldown = 0;
+  if (novaCooldown>0) {
+    novaCooldown-=deltaTime;
+    if (novaCooldown<0) novaCooldown=0;
   }
-  novaCooldownMeter.attribute("value", novaCooldown.toString());
+  novaCooldownMeter.attribute("value",novaCooldown.toString());
 
-  // singularity update
   singularity.update();
   singularity.show();
 
-  // update & show tendrils
+  // tendrils
+  let gravPull = gravitySlider.value();
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE) {
-      let gravPull = gravitySlider.value();
+    if (d<ORBIT_DISTANCE) {
       t.orbit(singularity.pos, gravPull);
     }
     t.update();
     t.show();
   }
 
-  // assimilation logic
-  let countOrbit = 0;
-  for (let t of tendrils) {
-    let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE) countOrbit++;
-  }
-  if (countOrbit >= 3 && singularity.state === "healthy") {
-    abyssAccumulator += deltaTime;
-  } else {
-    abyssAccumulator = 0;
-  }
-  if (abyssAccumulator >= ABSYSS_THRESHOLD && singularity.state === "healthy") {
-    singularity.state = "assimilating";
-    singularity.assimilationTimer = 0;
-    abyssAccumulator = 0;
-    explosionType = "death";
-    explosionTimer = explosionDuration;
-    deathBurstCount = 5;
-    deathBurstTimer = 0;
-  }
-  abyssMeter.attribute("value", abyssAccumulator.toString());
-
-  if ((singularity.state === "assimilating" || singularity.state === "dead") && deathBurstCount > 0) {
-    deathBurstTimer += deltaTime;
-    if (deathBurstTimer >= deathBurstInterval) {
-      explosionType = "death";
-      explosionTimer = explosionDuration;
-      deathBurstTimer = 0;
+  // if fraction=1 => explosion => we handle the multi-death burst chain
+  if ((colorState==="black") && deathBurstCount>0) {
+    deathBurstTimer+=deltaTime;
+    if (deathBurstTimer>=deathBurstInterval) {
+      explosionType="death";
+      explosionTimer=explosionDuration;
+      deathBurstTimer=0;
       deathBurstCount--;
     }
   }
 
-  // remove dead tendrils
-  tendrils = tendrils.filter(t => !t.dead);
-
-  // explosion effect
-  if (explosionTimer > 0) {
+  if (explosionTimer>0) {
     drawExplosion();
-    explosionTimer -= deltaTime;
+    explosionTimer-=deltaTime;
   }
+
+  // remove dead
+  tendrils=tendrils.filter(t=>!t.dead);
 }
 
-function windowResized() {
-  if (autoMode) {
-    resizeCanvas(windowWidth, windowHeight);
-    resetSimulation();
-  }
+// assimilationReset => revert fraction=0 => color=gold => etc
+function assimilationReset() {
+  abyssAccumulator=0;
+  singularity.deadTimer=0;
+  singularity.colorState="gold";
+  singularity.currentColor=color(255,215,0);
 }
 
 // -------------------------------------------------------------------
-// 4) Create HUD at the bottom
+// 4) Create HUD at bottom
 // -------------------------------------------------------------------
 function createHUD_Bottom() {
-  controlPanel = createDiv();
-  // position absolute at bottom
-  controlPanel.style("position", "absolute");
-  controlPanel.style("bottom", "0");
-  controlPanel.style("left", "0");
-  controlPanel.style("width", "100%");
-  controlPanel.style("background", "black");
-  controlPanel.style("color", "grey");
-  controlPanel.style("text-align", "center");
-  controlPanel.style("padding", "10px 0");
-  controlPanel.style("font-family", "sans-serif");
-  controlPanel.style("z-index", "9999");
+  controlPanel=createDiv();
+  controlPanel.style("position","absolute");
+  controlPanel.style("bottom","0");
+  controlPanel.style("left","0");
+  controlPanel.style("width","100%");
+  controlPanel.style("background","black");
+  controlPanel.style("color","grey");
+  controlPanel.style("text-align","center");
+  controlPanel.style("padding","10px 0");
+  controlPanel.style("font-family","sans-serif");
+  controlPanel.style("z-index","9999");
   controlPanel.parent(document.body);
 
-  // Row 1: Buttons
-  let row1 = createDiv();
+  // Row1: Spawn,Hunt,Burst,Nova
+  let row1=createDiv();
   row1.parent(controlPanel);
-  row1.style("display", "flex");
-  row1.style("justify-content", "center");
-  row1.style("align-items", "center");
-  row1.style("gap", "10px");
-  row1.style("margin-bottom", "10px");
+  row1.style("display","flex");
+  row1.style("justify-content","center");
+  row1.style("align-items","center");
+  row1.style("gap","10px");
+  row1.style("margin-bottom","10px");
 
-  let spawnBtn = createButton("Spawn");
+  let spawnBtn=createButton("Spawn");
   spawnBtn.parent(row1);
-  spawnBtn.mousePressed(() => spawnTendrils(5));
+  spawnBtn.mousePressed(()=>spawnTendrils(5));
 
-  let huntBtn = createButton("Hunt");
+  let huntBtn=createButton("Hunt");
   huntBtn.parent(row1);
   huntBtn.mousePressed(triggerHunt);
 
-  let burstBtn = createButton("Burst");
+  let burstBtn=createButton("Burst");
   burstBtn.parent(row1);
   burstBtn.mousePressed(triggerRepel);
 
-  let novaBtn = createButton("Nova");
+  let novaBtn=createButton("Nova");
   novaBtn.parent(row1);
-  novaBtn.mousePressed(() => {
-    if (novaCooldown <= 0) {
+  novaBtn.mousePressed(()=>{
+    if(novaCooldown<=0) {
       triggerNovaManual();
-      novaCooldown = NOVA_COOLDOWN_TIME;
+      novaCooldown=NOVA_COOLDOWN_TIME;
     }
   });
 
-  [spawnBtn, huntBtn, burstBtn, novaBtn].forEach(btn => {
-    btn.style("font-size", "18px");
-    btn.style("background-color", "#202325");
-    btn.style("color", "#9C89B8");
-    btn.style("padding", "5px 10px");
+  [spawnBtn,huntBtn,burstBtn,novaBtn].forEach(btn=>{
+    btn.style("font-size","18px");
+    btn.style("background-color","#202325");
+    btn.style("color","#9C89B8");
+    btn.style("padding","5px 10px");
   });
-  burstBtn.style("color", "#00FFFF");
-  novaBtn.style("color", "#00FFFF");
+  burstBtn.style("color","#00FFFF");
+  novaBtn.style("color","#00FFFF");
 
-  // Row 2: Sliders
-  let row2 = createDiv();
+  // Row2: Sliders
+  let row2=createDiv();
   row2.parent(controlPanel);
-  row2.style("display", "flex");
-  row2.style("justify-content", "center");
-  row2.style("align-items", "center");
-  row2.style("gap", "20px");
-  row2.style("margin-bottom", "5px");
+  row2.style("display","flex");
+  row2.style("justify-content","center");
+  row2.style("align-items","center");
+  row2.style("gap","20px");
+  row2.style("margin-bottom","5px");
 
-  agroSlider = createSlider(0, 5, 1.7, 0.1);
+  agroSlider=createSlider(0,5,1.7,0.1);
   agroSlider.parent(row2);
-  agroSlider.style("width", "120px");
+  agroSlider.style("width","120px");
 
-  gravitySlider = createSlider(0, 5, 1.5, 0.1);
+  gravitySlider=createSlider(0,5,1.5,0.1);
   gravitySlider.parent(row2);
-  gravitySlider.style("width", "120px");
+  gravitySlider.style("width","120px");
 
-  speedSlider = createSlider(0, 5, 1.95, 0.1);
+  speedSlider=createSlider(0,5,1.95,0.1);
   speedSlider.parent(row2);
-  speedSlider.style("width", "120px");
+  speedSlider.style("width","120px");
 
-  // Row 3: Labels
-  let row3 = createDiv();
+  // Row3: Labels
+  let row3=createDiv();
   row3.parent(controlPanel);
-  row3.style("display", "flex");
-  row3.style("justify-content", "center");
-  row3.style("align-items", "center");
-  row3.style("gap", "60px");
-  row3.style("margin-bottom", "10px");
+  row3.style("display","flex");
+  row3.style("justify-content","center");
+  row3.style("align-items","center");
+  row3.style("gap","60px");
+  row3.style("margin-bottom","10px");
 
-  let agroLabel = createSpan("Agro");
+  let agroLabel=createSpan("Agro");
   agroLabel.parent(row3);
-  agroLabel.style("font-size", "14px");
-  agroLabel.style("color", "#CCCCCC");
+  agroLabel.style("font-size","14px");
+  agroLabel.style("color","#CCCCCC");
 
-  let gravLabel = createSpan("Gravity");
+  let gravLabel=createSpan("Gravity");
   gravLabel.parent(row3);
-  gravLabel.style("font-size", "14px");
-  gravLabel.style("color", "#CCCCCC");
+  gravLabel.style("font-size","14px");
+  gravLabel.style("color","#CCCCCC");
 
-  let spdLabel = createSpan("Speed");
+  let spdLabel=createSpan("Speed");
   spdLabel.parent(row3);
-  spdLabel.style("font-size", "14px");
-  spdLabel.style("color", "#CCCCCC");
+  spdLabel.style("font-size","14px");
+  spdLabel.style("color","#CCCCCC");
 
-  // Row 4: Nova & NovaCooldown
-  let row4 = createDiv();
+  // Row4: Nova & NovaCooldown
+  let row4=createDiv();
   row4.parent(controlPanel);
-  row4.style("display", "flex");
-  row4.style("justify-content", "center");
-  row4.style("align-items", "center");
-  row4.style("gap", "20px");
-  row4.style("margin-bottom", "5px");
+  row4.style("display","flex");
+  row4.style("justify-content","center");
+  row4.style("align-items","center");
+  row4.style("gap","20px");
+  row4.style("margin-bottom","5px");
 
-  novaMeter = createElement('meter');
+  novaMeter=createElement('meter');
   novaMeter.parent(row4);
-  novaMeter.attribute("min", "0");
-  novaMeter.attribute("max", NOVA_THRESHOLD.toString());
-  novaMeter.attribute("value", "0");
+  novaMeter.attribute("min","0");
+  novaMeter.attribute("max",NOVA_THRESHOLD.toString());
+  novaMeter.attribute("value","0");
 
-  novaCooldownMeter = createElement('meter');
+  novaCooldownMeter=createElement('meter');
   novaCooldownMeter.parent(row4);
-  novaCooldownMeter.attribute("min", "0");
-  novaCooldownMeter.attribute("max", NOVA_COOLDOWN_TIME.toString());
-  novaCooldownMeter.attribute("value", "0");
+  novaCooldownMeter.attribute("min","0");
+  novaCooldownMeter.attribute("max",NOVA_COOLDOWN_TIME.toString());
+  novaCooldownMeter.attribute("value","0");
 
-  // Row 5: Hunt & Abyss
-  let row5 = createDiv();
+  // Row5: Hunt & Abyss
+  let row5=createDiv();
   row5.parent(controlPanel);
-  row5.style("display", "flex");
-  row5.style("justify-content", "center");
-  row5.style("align-items", "center");
-  row5.style("gap", "20px");
-  row5.style("margin-bottom", "10px");
+  row5.style("display","flex");
+  row5.style("justify-content","center");
+  row5.style("align-items","center");
+  row5.style("gap","20px");
+  row5.style("margin-bottom","10px");
 
-  huntMeter = createElement('meter');
+  huntMeter=createElement('meter');
   huntMeter.parent(row5);
-  huntMeter.attribute("min", "0");
-  huntMeter.attribute("max", HUNT_THRESHOLD.toString());
-  huntMeter.attribute("value", "0");
+  huntMeter.attribute("min","0");
+  huntMeter.attribute("max",HUNT_THRESHOLD.toString());
+  huntMeter.attribute("value","0");
 
-  abyssMeter = createElement('meter');
+  abyssMeter=createElement('meter');
   abyssMeter.parent(row5);
-  abyssMeter.attribute("min", "0");
-  abyssMeter.attribute("max", ABSYSS_THRESHOLD.toString());
-  abyssMeter.attribute("value", "0");
+  abyssMeter.attribute("min","0");
+  abyssMeter.attribute("max",ABSYSS_THRESHOLD.toString());
+  abyssMeter.attribute("value","0");
 
-  // Row 6: Walls On/Off | D-Pad | size presets
-  let row6 = createDiv();
+  // Row6: Walls On/Off, D-Pad, PC, Mobile, Auto, Tablet
+  let row6=createDiv();
   row6.parent(controlPanel);
-  row6.style("display", "flex");
-  row6.style("justify-content", "center");
-  row6.style("align-items", "center");
-  row6.style("gap", "10px");
+  row6.style("display","flex");
+  row6.style("justify-content","center");
+  row6.style("align-items","center");
+  row6.style("gap","10px");
 
-  let wallsBtn = createButton("Walls: OFF");
+  let wallsBtn=createButton("Walls: OFF");
   wallsBtn.parent(row6);
-  wallsBtn.mousePressed(() => {
-    wallsOn = !wallsOn;
-    wallsBtn.html("Walls: " + (wallsOn ? "ON" : "OFF"));
+  wallsBtn.mousePressed(()=>{
+    wallsOn=!wallsOn;
+    wallsBtn.html("Walls: "+(wallsOn?"ON":"OFF"));
   });
 
   // D-Pad container
-  let dPadCont = createDiv();
+  let dPadCont=createDiv();
   dPadCont.parent(row6);
-  dPadCont.style("display", "flex");
-  dPadCont.style("flex-direction", "column");
-  dPadCont.style("align-items", "center");
-  dPadCont.style("gap", "5px");
+  dPadCont.style("display","flex");
+  dPadCont.style("flex-direction","column");
+  dPadCont.style("align-items","center");
+  dPadCont.style("gap","5px");
 
-  let dPadRow1 = createDiv();
+  let dPadRow1=createDiv();
   dPadRow1.parent(dPadCont);
-  dPadRow1.style("display", "flex");
-  dPadRow1.style("justify-content", "center");
-  dPadUp = createButton("↑");
+  dPadRow1.style("display","flex");
+  dPadRow1.style("justify-content","center");
+  dPadUp=createButton("↑");
   dPadUp.parent(dPadRow1);
-  dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
-  dPadUp.mouseReleased(() => { dPadDirection.y = 0; });
+  dPadUp.mousePressed(()=>{dPadDirection.set(0,-1);});
+  dPadUp.mouseReleased(()=>{dPadDirection.y=0;});
 
-  let dPadRow2 = createDiv();
+  let dPadRow2=createDiv();
   dPadRow2.parent(dPadCont);
-  dPadRow2.style("display", "flex");
-  dPadRow2.style("justify-content", "space-between");
-  dPadRow2.style("width", "60px");
-  dPadLeft = createButton("←");
+  dPadRow2.style("display","flex");
+  dPadRow2.style("justify-content","space-between");
+  dPadRow2.style("width","60px");
+  dPadLeft=createButton("←");
   dPadLeft.parent(dPadRow2);
-  dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
-  dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
+  dPadLeft.mousePressed(()=>{dPadDirection.set(-1,dPadDirection.y);});
+  dPadLeft.mouseReleased(()=>{dPadDirection.x=0;});
 
-  dPadRight = createButton("→");
+  dPadRight=createButton("→");
   dPadRight.parent(dPadRow2);
-  dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
-  dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
+  dPadRight.mousePressed(()=>{dPadDirection.set(1,dPadDirection.y);});
+  dPadRight.mouseReleased(()=>{dPadDirection.x=0;});
 
-  let dPadRow3 = createDiv();
+  let dPadRow3=createDiv();
   dPadRow3.parent(dPadCont);
-  dPadRow3.style("display", "flex");
-  dPadRow3.style("justify-content", "center");
-  dPadDown = createButton("↓");
+  dPadRow3.style("display","flex");
+  dPadRow3.style("justify-content","center");
+  dPadDown=createButton("↓");
   dPadDown.parent(dPadRow3);
-  dPadDown.mousePressed(() => { dPadDirection.set(dPadDirection.x, 1); });
-  dPadDown.mouseReleased(() => { dPadDirection.y = 0; });
+  dPadDown.mousePressed(()=>{dPadDirection.set(dPadDirection.x,1);});
+  dPadDown.mouseReleased(()=>{dPadDirection.y=0;});
 
-  dPadDirection = createVector(0, 0);
+  dPadDirection=createVector(0,0);
 
   // Buttons for PC, Mobile, Auto, Tablet
-  let pcBtn = createButton("PC");
+  let pcBtn=createButton("PC");
   pcBtn.parent(row6);
-  pcBtn.mousePressed(() => {
-    autoMode = false;
-    resizeCanvas(1200, 900);
+  pcBtn.mousePressed(()=>{
+    autoMode=false;
+    resizeCanvas(1200,900);
     resetSimulation();
   });
 
-  let mobileBtn = createButton("Mobile");
+  let mobileBtn=createButton("Mobile");
   mobileBtn.parent(row6);
-  mobileBtn.mousePressed(() => {
-    autoMode = false;
-    resizeCanvas(360, 640);
+  mobileBtn.mousePressed(()=>{
+    autoMode=false;
+    resizeCanvas(360,640);
     resetSimulation();
   });
 
-  let autoBtn = createButton("Auto");
+  let autoBtn=createButton("Auto");
   autoBtn.parent(row6);
-  autoBtn.mousePressed(() => {
-    autoMode = true;
-    resizeCanvas(windowWidth, windowHeight);
+  autoBtn.mousePressed(()=>{
+    autoMode=true;
+    resizeCanvas(windowWidth,windowHeight);
     resetSimulation();
   });
 
-  let tabletBtn = createButton("Tablet");
+  let tabletBtn=createButton("Tablet");
   tabletBtn.parent(row6);
-  tabletBtn.mousePressed(() => {
-    autoMode = false;
-    resizeCanvas(768, 1024);
+  tabletBtn.mousePressed(()=>{
+    autoMode=false;
+    resizeCanvas(768,1024);
     resetSimulation();
   });
 }
 
 // -------------------------------------------------------------------
-// 5) The rest of the logic
+// 5) The rest of logic
 // -------------------------------------------------------------------
 function resetSimulation() {
-  simulationRunning = true;
-  explosionTimer = 0;
-  spawnTimer = 0;
-  lastNovaTime = 0;
-  abyssAccumulator = 0;
-  novaTimer = 0;
-  huntTimer = 0;
-  novaCooldown = 0;
+  simulationRunning=true;
+  explosionTimer=0;
+  spawnTimer=0;
+  lastNovaTime=0;
+  abyssAccumulator=0;
+  novaTimer=0;
+  huntTimer=0;
+  novaCooldown=0;
+  deathBurstCount=0;
+  deathBurstTimer=0;
 
-  tendrils = [];
-  singularity = new Singularity(width / 2, height / 2);
+  tendrils=[];
+  singularity=new Singularity(width/2,height/2);
 
-  for (let i = 0; i < TENDRIL_COUNT; i++) {
-    let t = new Tendril();
+  for(let i=0;i<TENDRIL_COUNT;i++){
+    let t=new Tendril();
     t.autoHunt(singularity.pos);
     tendrils.push(t);
   }
 }
 
-function spawnTendrils(n = 1) {
-  let available = 50 - tendrils.length;
-  let toSpawn = min(n, available);
-  for (let i = 0; i < toSpawn; i++) {
-    let t = new Tendril();
+function spawnTendrils(n=1){
+  let available=50 - tendrils.length;
+  let toSpawn=min(n,available);
+  for(let i=0;i<toSpawn;i++){
+    let t=new Tendril();
     t.autoHunt(singularity.pos);
     tendrils.push(t);
   }
 }
 
-// Use finalSpeed in draw
-function handleKeyboard(finalSpeed) {
-  // This function is now passed finalSpeed from draw
-  // But we still read the arrow keys. We'll apply finalSpeed as the movement rate.
-  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= finalSpeed;
-  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += finalSpeed;
-  if (keyIsDown(UP_ARROW) || keyIsDown(87)) singularity.pos.y -= finalSpeed;
-  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) singularity.pos.y += finalSpeed;
+function handleKeyboard(finalSpeed){
+  if(keyIsDown(LEFT_ARROW)||keyIsDown(65)) singularity.pos.x-=finalSpeed;
+  if(keyIsDown(RIGHT_ARROW)||keyIsDown(68)) singularity.pos.x+=finalSpeed;
+  if(keyIsDown(UP_ARROW)||keyIsDown(87)) singularity.pos.y-=finalSpeed;
+  if(keyIsDown(DOWN_ARROW)||keyIsDown(83)) singularity.pos.y+=finalSpeed;
 
-  // clamp to canvas
-  singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
-  singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
+  // clamp
+  singularity.pos.x=constrain(singularity.pos.x,singularity.radius,width - singularity.radius);
+  singularity.pos.y=constrain(singularity.pos.y,singularity.radius,height - singularity.radius);
 }
 
-function keyReleased() {
-  if (keyCode === 32) triggerRepel();
-  if (keyCode === 86 && novaCooldown <= 0) {
+function keyReleased(){
+  if(keyCode===32) triggerRepel();
+  if(keyCode===86 && novaCooldown<=0){
     triggerNovaManual();
-    novaCooldown = NOVA_COOLDOWN_TIME;
+    novaCooldown=NOVA_COOLDOWN_TIME;
   }
 }
 
-function triggerHunt() {
-  for (let t of tendrils) {
+function triggerHunt(){
+  for(let t of tendrils){
     t.hunt(singularity.pos);
   }
 }
 
-function triggerRepel() {
-  // repel if in orbit
-  for (let t of tendrils) {
-    let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE) {
-      let repulse = p5.Vector.sub(t.pos, singularity.pos);
+function triggerRepel(){
+  for(let t of tendrils){
+    let d=p5.Vector.dist(t.pos,singularity.pos);
+    if(d<ORBIT_DISTANCE){
+      let repulse=p5.Vector.sub(t.pos,singularity.pos);
       repulse.normalize();
       repulse.mult(12);
-      t.vel = repulse.copy();
+      t.vel=repulse.copy();
     }
   }
-  explosionType = "burst";
-  explosionTimer = 500;
+  explosionType="burst";
+  explosionTimer=500;
 }
 
-function triggerNovaManual() {
-  for (let t of tendrils) {
-    let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE && !t.immolating) {
+function triggerNovaManual(){
+  for(let t of tendrils){
+    let d=p5.Vector.dist(t.pos,singularity.pos);
+    if(d<ORBIT_DISTANCE && !t.immolating){
       t.startImmolation();
     }
   }
-  explosionType = "nova";
-  explosionTimer = 500;
+  explosionType="nova";
+  explosionTimer=500;
 }
 
-function triggerNovaBurst() {
-  let count = 0;
-  for (let t of tendrils) {
-    let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE && !t.immolating) {
+function triggerNovaBurst(){
+  let count=0;
+  for(let t of tendrils){
+    let d=p5.Vector.dist(t.pos,singularity.pos);
+    if(d<ORBIT_DISTANCE && !t.immolating){
       t.startImmolation();
       count++;
-      if (count >= 5) break;
+      if(count>=5) break;
     }
   }
-  explosionType = "nova";
-  explosionTimer = 500;
-  lastNovaTime = millis();
+  explosionType="nova";
+  explosionTimer=500;
 }
 
-function touchStarted() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    // if x < 30% => D-Pad
-    if (t.x < width * 0.3) {
-      dPadActive = true;
+function touchStarted(){
+  if(touches.length>0){
+    let t=touches[0];
+    // if x<30% => D-Pad
+    if(t.x<width*0.3){
+      dPadActive=true;
     } else {
-      touchStartX = t.x;
-      touchStartY = t.y;
+      touchStartX=t.x;
+      touchStartY=t.y;
     }
   }
 }
 
-function touchMoved() {
-  // We'll apply final speed in draw, so let's do nothing special here
-  // or we can do a direct movement if we want. But let's keep it minimal
+function touchMoved(){
+  // no direct movement, we do it in draw with finalSpeed
 }
 
-function touchEnded() {
-  dPadActive = false;
+function touchEnded(){
+  dPadActive=false;
 }
 
-function windowResized() {
-  if (autoMode) {
-    resizeCanvas(windowWidth, windowHeight);
+function windowResized(){
+  if(autoMode){
+    resizeCanvas(windowWidth,windowHeight);
     resetSimulation();
   }
 }
 
-function drawExplosion() {
+function drawExplosion(){
   push();
-  translate(singularity.pos.x, singularity.pos.y);
-  let steps = 5;
-  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
+  translate(singularity.pos.x,singularity.pos.y);
+  let steps=5;
+  let alphaVal=map(explosionTimer,0,explosionDuration,0,255);
 
-  if (explosionType === "nova") {
-    stroke(0,255,255, alphaVal);
-  } else if (explosionType === "burst") {
-    stroke(255,215,0, alphaVal);
-  } else if (explosionType === "death") {
-    stroke(255,0,255, alphaVal);
+  if(explosionType==="nova"){
+    stroke(0,255,255,alphaVal);
+  } else if(explosionType==="burst"){
+    stroke(255,215,0,alphaVal);
+  } else if(explosionType==="death"){
+    stroke(255,0,255,alphaVal);
   } else {
-    stroke(255,215,0, alphaVal);
+    stroke(255,215,0,alphaVal);
   }
 
   noFill();
-  for (let i = 0; i < 20; i++) {
+  for(let i=0;i<20;i++){
     push();
     rotate(random(TWO_PI));
     beginShape();
-    let len = random(20, 50);
-    vertex(0, 0);
-    for (let j = 0; j < steps; j++) {
-      let angle = random(-Math.PI/4, Math.PI/4);
-      let x = cos(angle) * len;
-      let y = sin(angle) * len;
-      vertex(x, y);
+    let len=random(20,50);
+    vertex(0,0);
+    for(let j=0;j<steps;j++){
+      let angle=random(-Math.PI/4,Math.PI/4);
+      let x=cos(angle)*len;
+      let y=sin(angle)*len;
+      vertex(x,y);
     }
     endShape();
     pop();
