@@ -2,18 +2,19 @@ console.log("Ignis.js loaded and running!");
 
 /* 
   Ignis.js
-  HUD Layout:
-  
-  Row 1: [Spawn | Hunt | Burst | Nova]
-  Row 2: [Agro Input | Gravity Input | Speed Input]
-  Row 3: [Agro | Gravity | Speed]    <-- Note: "Agro" formerly "Aggression"
-  Row 4: [Nova Meter | Nova Cooldown Meter]
-  Row 5: [Hunt Meter | Abyss Meter]
+  Final Version
 
-  Touch Controls:
-    - Swiping anywhere moves the player (with increased responsiveness).
-  D-Pad Controls (for mobile):
-    - A set of on‑screen buttons (Up, Down, Left, Right) on the left side that move the player.
+  HUD Layout:
+  - Row 1: [Spawn | Hunt | Burst | Nova]
+  - Row 2: [Agro Input | Gravity Input | Speed Input]
+  - Row 3: [Agro | Gravity | Speed]
+  - Row 4: [Nova Meter | Nova Cooldown Meter]
+  - Row 5: [Hunt Meter | Abyss Meter]
+
+  Changes:
+  - "Aggression" → "Agro"
+  - Faster touch movement (multiplier = 1.0)
+  - On-screen D-Pad for mobile
 */
 
 // ---------------- Global Constants & Variables ----------------
@@ -68,14 +69,14 @@ let novaMeter, novaCooldownMeter, huntMeter, abyssMeter;
 let dPadActive = false;
 let touchStartX = 0;
 let touchStartY = 0;
-let dPadCenterX = 80;  // Center position for the virtual d-pad (adjust as needed)
-let dPadCenterY = 820; // Adjust based on your canvas/controlPanel placement
+let dPadCenterX = 80;  // Center for the virtual D-Pad (adjust as needed)
+let dPadCenterY = 820; // Adjust for your layout
 let dPadRadius = 50;
 
-// D-Pad on-screen buttons & direction vector
+// D-Pad on-screen buttons & direction
 let dPadContainer;
 let dPadUp, dPadDown, dPadLeft, dPadRight;
-let dPadDirection; // p5.Vector to hold current D-Pad direction
+let dPadDirection; // p5.Vector for current D-Pad direction
 
 // ---------------- Setup ----------------
 function setup() {
@@ -90,7 +91,7 @@ function setup() {
   container.style("width", "100%");
   container.style("max-width", "100%");
 
-  // Create the canvas inside this container
+  // Create the canvas
   cnv = createCanvas(1200, 900);
   cnv.parent(container);
 
@@ -118,7 +119,7 @@ function setup() {
     meter.novacooldown::-moz-meter-bar { background: #555555; }
   `).parent(document.head);
 
-  // Create Control Panel (HUD)
+  // Control Panel (HUD)
   controlPanel = createDiv();
   controlPanel.parent(container);
   controlPanel.style("background", "black");
@@ -129,7 +130,7 @@ function setup() {
   controlPanel.style("max-width", "1200px");
   controlPanel.style("font-family", "sans-serif");
 
-  // --- Row 1: Buttons ---
+  // Row 1: Buttons
   row1 = createDiv();
   row1.parent(controlPanel);
   row1.style("display", "flex");
@@ -168,7 +169,7 @@ function setup() {
   burstBtn.style("color", "#00FFFF");
   novaBtn.style("color", "#00FFFF");
 
-  // --- Row 2: Numeric Inputs (Agro, Gravity, Speed) ---
+  // Row 2: Numeric Inputs (Agro, Gravity, Speed)
   row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
@@ -177,7 +178,7 @@ function setup() {
   row2.style("gap", "20px");
   row2.style("margin-bottom", "5px");
 
-  agroInput = createInput('1.7', 'number'); // Renamed from aggression to agro
+  agroInput = createInput('1.7', 'number');
   agroInput.parent(row2);
   agroInput.style("font-size", "18px");
   agroInput.style("width", "60px");
@@ -195,7 +196,7 @@ function setup() {
   speedInput.style("width", "60px");
   speedInput.style("text-align", "center");
 
-  // --- Row 3: Labels for Inputs (Agro, Gravity, Speed) ---
+  // Row 3: Labels (Agro, Gravity, Speed)
   row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
@@ -219,7 +220,7 @@ function setup() {
   spdLabel.style("font-size", "14px");
   spdLabel.style("color", "#CCCCCC");
 
-  // --- Row 4: Top Meters (Nova, Nova Cooldown) ---
+  // Row 4: Meters (Nova, Nova Cooldown)
   row4 = createDiv();
   row4.parent(controlPanel);
   row4.style("display", "flex");
@@ -246,7 +247,7 @@ function setup() {
   novaCooldownMeter.style("width", "200px");
   novaCooldownMeter.style("height", "20px");
 
-  // --- Row 5: Bottom Meters (Hunt, Abyss) ---
+  // Row 5: Meters (Hunt, Abyss)
   row5 = createDiv();
   row5.parent(controlPanel);
   row5.style("display", "flex");
@@ -272,61 +273,8 @@ function setup() {
   abyssMeter.style("width", "200px");
   abyssMeter.style("height", "20px");
 
-  // --- Create D-Pad for Mobile Controls ---
-  dPadContainer = createDiv();
-  dPadContainer.parent(container);
-  dPadContainer.style("position", "absolute");
-  dPadContainer.style("bottom", "100px"); // Adjust as needed
-  dPadContainer.style("left", "10px");
-  dPadContainer.style("display", "flex");
-  dPadContainer.style("flex-direction", "column");
-  dPadContainer.style("align-items", "center");
-  dPadContainer.style("gap", "5px");
-
-  // D-Pad Row 1: Up button
-  let dPadRow1 = createDiv();
-  dPadRow1.parent(dPadContainer);
-  dPadRow1.style("display", "flex");
-  dPadRow1.style("justify-content", "center");
-  dPadUp = createButton("↑");
-  dPadUp.parent(dPadRow1);
-  dPadUp.style("font-size", "18px");
-  dPadUp.style("padding", "5px 10px");
-  dPadUp.mousePressed(() => { dPadDirection.set(0, -1); });
-  dPadUp.mouseReleased(() => { dPadDirection.set(0, 0); });
-
-  // D-Pad Row 2: Left and Right buttons
-  let dPadRow2 = createDiv();
-  dPadRow2.parent(dPadContainer);
-  dPadRow2.style("display", "flex");
-  dPadRow2.style("justify-content", "space-between");
-  dPadLeft = createButton("←");
-  dPadLeft.parent(dPadRow2);
-  dPadLeft.style("font-size", "18px");
-  dPadLeft.style("padding", "5px 10px");
-  dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
-  dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
-  dPadRight = createButton("→");
-  dPadRight.parent(dPadRow2);
-  dPadRight.style("font-size", "18px");
-  dPadRight.style("padding", "5px 10px");
-  dPadRight.mousePressed(() => { dPadDirection.set(1, dPadDirection.y); });
-  dPadRight.mouseReleased(() => { dPadDirection.x = 0; });
-
-  // D-Pad Row 3: Down button
-  let dPadRow3 = createDiv();
-  dPadRow3.parent(dPadContainer);
-  dPadRow3.style("display", "flex");
-  dPadRow3.style("justify-content", "center");
-  dPadDown = createButton("↓");
-  dPadDown.parent(dPadRow3);
-  dPadDown.style("font-size", "18px");
-  dPadDown.style("padding", "5px 10px");
-  dPadDown.mousePressed(() => { dPadDirection.set(dPadDirection.x, 1); });
-  dPadDown.mouseReleased(() => { dPadDirection.y = 0; });
-
-  // Initialize dPadDirection vector
-  dPadDirection = createVector(0, 0);
+  // Create the D-Pad for mobile
+  createDPad();
 
   // Initialize simulation
   resetSimulation();
@@ -401,7 +349,7 @@ function triggerRepel() {
     }
   }
   explosionType = "burst";
-  explosionTimer = explosionDuration;
+  explosionTimer = 500;
 }
 
 function triggerNovaManual() {
@@ -412,7 +360,7 @@ function triggerNovaManual() {
     }
   }
   explosionType = "nova";
-  explosionTimer = explosionDuration;
+  explosionTimer = 500;
 }
 
 function triggerNovaBurst() {
@@ -426,7 +374,7 @@ function triggerNovaBurst() {
     }
   }
   explosionType = "nova";
-  explosionTimer = explosionDuration;
+  explosionTimer = 500;
   lastNovaTime = millis();
 }
 
@@ -436,14 +384,10 @@ function draw() {
   handleKeyboard();
 
   // D-Pad continuous movement
-  if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
+  if (dPadDirection && (dPadDirection.x !== 0 || dPadDirection.y !== 0)) {
     singularity.pos.x += dPadDirection.x * moveSpeed;
     singularity.pos.y += dPadDirection.y * moveSpeed;
   }
-
-  // Touch controls (swipe)
-  // Multiplier increased from 0.05 to 1.0 for better responsiveness
-  // (Handled in touchMoved below.)
 
   let simSpeed = parseFloat(agroInput.value());
   let gravPull = parseFloat(gravityInput.value());
@@ -479,7 +423,9 @@ function draw() {
 
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
-    if (d < ORBIT_DISTANCE) { t.orbit(singularity.pos, gravPull); }
+    if (d < ORBIT_DISTANCE) {
+      t.orbit(singularity.pos, gravPull);
+    }
     t.update();
     t.show();
   }
@@ -490,6 +436,7 @@ function draw() {
     if (d < ORBIT_DISTANCE) { countOrbit++; }
   }
 
+  // Abyss assimilation
   if (countOrbit >= 3 && singularity.state === "healthy") {
     abyssAccumulator += deltaTime;
   } else {
@@ -500,17 +447,18 @@ function draw() {
     singularity.assimilationTimer = 0;
     abyssAccumulator = 0;
     explosionType = "death";
-    explosionTimer = explosionDuration;
+    explosionTimer = 500;
     deathBurstCount = 5;
     deathBurstTimer = 0;
   }
   abyssMeter.attribute("value", abyssAccumulator.toString());
 
+  // Death burst chain
   if ((singularity.state === "assimilating" || singularity.state === "dead") && deathBurstCount > 0) {
     deathBurstTimer += deltaTime;
     if (deathBurstTimer >= deathBurstInterval) {
       explosionType = "death";
-      explosionTimer = explosionDuration;
+      explosionTimer = 500;
       deathBurstTimer = 0;
       deathBurstCount--;
     }
@@ -524,818 +472,21 @@ function draw() {
   }
 }
 
-// ---------------- Touch Controls ----------------
-function touchStarted() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    // If touch begins in left 30% of canvas, check for d-pad activation
-    if (t.x < width * 0.3) {
-      if (dist(t.x, t.y, dPadCenterX, dPadCenterY) < dPadRadius) {
-        dPadActive = true;
-      }
-    } else {
-      touchStartX = t.x;
-      touchStartY = t.y;
-    }
-  }
-  return false;
-}
-
-function touchMoved() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    if (dPadActive) {
-      let dx = t.x - dPadCenterX;
-      let dy = t.y - dPadCenterY;
-      singularity.pos.x += dx * 1.0;
-      singularity.pos.y += dy * 1.0;
-    } else {
-      let dx = t.x - touchStartX;
-      let dy = t.y - touchStartY;
-      singularity.pos.x += dx * 1.0;
-      singularity.pos.y += dy * 1.0;
-      touchStartX = t.x;
-      touchStartY = t.y;
-    }
-  }
-  return false;
-}
-
-function touchEnded() {
-  dPadActive = false;
-  return false;
-}
-
-// ---------------- Singularity Class ----------------
-class Singularity {
-  constructor(x, y) {
-    this.pos = createVector(x, y);
-    this.baseRadius = 15;
-    this.radius = this.baseRadius;
-    this.pulseSpeed = 0.05;
-    this.state = "healthy";
-    this.assimilationTimer = 0;
-    this.respawnTimer = 0;
-    this.currentColor = color(255,215,0);
-  }
-
-  update() {
-    if (this.state === "healthy") {
-      this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
-      let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
-      let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
-      let p = abyssAccumulator / ABSYSS_THRESHOLD;
-      if (p < 0.5) {
-        this.currentColor = baseColor;
-      } else if (p < 1) {
-        let u = (p - 0.5) / 0.5;
-        this.currentColor = lerpColor(baseColor, color(255,0,255), u);
-      } else {
-        this.state = "assimilating";
-        this.assimilationTimer = 0;
-        this.currentColor = color(255,0,255);
-      }
-    } else if (this.state === "assimilating") {
-      this.assimilationTimer += deltaTime;
-      if (this.assimilationTimer < 2000) {
-        let t = this.assimilationTimer / 2000;
-        this.currentColor = lerpColor(color(255,0,255), color(0,0,0), t);
-      } else {
-        this.state = "dead";
-        this.respawnTimer = 0;
-        this.currentColor = color(0,0,0);
-      }
-    } else if (this.state === "dead") {
-      this.respawnTimer += deltaTime;
-      if (this.respawnTimer > 7000) {
-        this.state = "healthy";
-        this.assimilationTimer = 0;
-        this.respawnTimer = 0;
-        abyssAccumulator = 0;
-        this.currentColor = color(255,215,0);
-      }
-    }
-  }
-
-  show() {
-    noStroke();
-    if (this.state === "dead") {
-      stroke(255,0,255);
-      strokeWeight(2);
-    }
-    fill(this.currentColor);
-    ellipse(this.pos.x, this.pos.y, this.radius * 2, this.radius * 2);
-    noStroke();
-  }
-}
-
-// ---------------- Tendril Class ----------------
-class Tendril {
-  constructor() {
-    let edge = floor(random(4));
-    if (edge === 0) { this.pos = createVector(random(width), 0); }
-    else if (edge === 1) { this.pos = createVector(width, random(height)); }
-    else if (edge === 2) { this.pos = createVector(random(width), height); }
-    else { this.pos = createVector(0, random(height)); }
-
-    this.vel = createVector(0, 0);
-    this.acc = createVector(0, 0);
-    this.maxSpeed = 3;
-    this.tail = [];
-    this.tailMax = 20;
-    this.boostTimer = 0;
-    this.immolating = false;
-    this.immolateTimer = 0;
-    this.immolateDuration = 2000;
-    this.dead = false;
-  }
-
-  autoHunt(targetPos) {
-    let force = p5.Vector.sub(targetPos, this.pos);
-    force.setMag(random(1, 2));
-    this.vel = force;
-  }
-
-  hunt(targetPos) {
-    this.boostTimer = 30;
-  }
-
-  orbit(targetPos, pullStrength) {
-    let desired = p5.Vector.sub(targetPos, this.pos);
-    let tangent = createVector(-desired.y, desired.x);
-    tangent.normalize();
-    tangent.mult(pullStrength);
-    desired.normalize();
-    desired.mult(pullStrength);
-    this.acc.add(p5.Vector.add(desired, tangent));
-  }
-
-  startImmolation() {
-    if (!this.immolating) {
-      this.immolating = true;
-      this.immolateTimer = 0;
-    }
-  }
-
-  update() {
-    if (!simulationRunning) return;
-
-    if (this.immolating) {
-      this.immolateTimer += deltaTime;
-      if (this.immolateTimer > this.immolateDuration) {
-        this.dead = true;
-      }
-    } else {
-      let d = p5.Vector.dist(this.pos, singularity.pos);
-      if (d > ORBIT_DISTANCE) {
-        let baseForce = p5.Vector.sub(singularity.pos, this.pos);
-        baseForce.setMag(0.05);
-        this.acc.add(baseForce);
-      }
-      if (this.boostTimer > 0) {
-        let boostForce = p5.Vector.sub(singularity.pos, this.pos);
-        boostForce.setMag(0.2);
-        this.acc.add(boostForce);
-        this.boostTimer--;
-      }
-      this.vel.add(this.acc);
-      this.vel.limit(this.maxSpeed * parseFloat(agroInput.value()));
-      this.pos.add(this.vel);
-      this.acc.mult(0);
-    }
-
-    this.tail.push(this.pos.copy());
-    if (this.tail.length > this.tailMax) {
-      this.tail.shift();
-    }
-  }
-
-  show() {
-    noStroke();
-    let drawColor;
-    if (this.immolating) {
-      if (this.immolateTimer < this.immolateDuration / 2) {
-        let amt = this.immolateTimer / (this.immolateDuration / 2);
-        drawColor = lerpColor(purpleColor, cyanColor, amt);
-      } else {
-        let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
-        drawColor = lerpColor(cyanColor, blackColor, amt);
-      }
-    } else {
-      drawColor = color(130, 0, 130);
-    }
-    fill(drawColor);
-    ellipse(this.pos.x, this.pos.y, 7, 7);
-
-    strokeWeight(1);
-    noFill();
-    beginShape();
-    for (let i = 0; i < this.tail.length; i++) {
-      let pos = this.tail[i];
-      let alpha = map(i, 0, this.tail.length, 0, 255);
-      stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
-      vertex(pos.x, pos.y);
-    }
-    endShape();
-  }
-}
-
-// ---------------- Explosion Effect ----------------
-function drawExplosion() {
-  push();
-  translate(singularity.pos.x, singularity.pos.y);
-  let steps = 5;
-  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
-
-  if (explosionType === "nova") {
-    stroke(0,255,255, alphaVal);
-  } else if (explosionType === "burst") {
-    stroke(255,215,0, alphaVal);
-  } else if (explosionType === "death") {
-    stroke(255,0,255, alphaVal);
-  } else {
-    stroke(255,215,0, alphaVal);
-  }
-
-  noFill();
-  for (let i = 0; i < 20; i++) {
-    push();
-    rotate(random(TWO_PI));
-    beginShape();
-    let len = random(20, 50);
-    vertex(0, 0);
-    for (let j = 0; j < steps; j++) {
-      let angle = random(-Math.PI/4, Math.PI/4);
-      let x = cos(angle) * len;
-      let y = sin(angle) * len;
-      vertex(x, y);
-    }
-    endShape();
-    pop();
-  }
-  pop();
-}
-
-// ---------------- Touch Controls ----------------
-function touchStarted() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    // If touch begins in left 30% of canvas, check for d-pad activation
-    if (t.x < width * 0.3) {
-      if (dist(t.x, t.y, dPadCenterX, dPadCenterY) < dPadRadius) {
-        dPadActive = true;
-      }
-    } else {
-      touchStartX = t.x;
-      touchStartY = t.y;
-    }
-  }
-  return false;
-}
-
-function touchMoved() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    if (dPadActive) {
-      let dx = t.x - dPadCenterX;
-      let dy = t.y - dPadCenterY;
-      singularity.pos.x += dx * 1.0;
-      singularity.pos.y += dy * 1.0;
-    } else {
-      let dx = t.x - touchStartX;
-      let dy = t.y - touchStartY;
-      singularity.pos.x += dx * 1.0;
-      singularity.pos.y += dy * 1.0;
-      touchStartX = t.x;
-      touchStartY = t.y;
-    }
-  }
-  return false;
-}
-
-function touchEnded() {
-  dPadActive = false;
-  return false;
-}
-
-// ---------------- Singularity Class ----------------
-class Singularity {
-  constructor(x, y) {
-    this.pos = createVector(x, y);
-    this.baseRadius = 15;
-    this.radius = this.baseRadius;
-    this.pulseSpeed = 0.05;
-    this.state = "healthy";
-    this.assimilationTimer = 0;
-    this.respawnTimer = 0;
-    this.currentColor = color(255,215,0);
-  }
-
-  update() {
-    if (this.state === "healthy") {
-      this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
-      let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
-      let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
-      let p = abyssAccumulator / ABSYSS_THRESHOLD;
-      if (p < 0.5) {
-        this.currentColor = baseColor;
-      } else if (p < 1) {
-        let u = (p - 0.5) / 0.5;
-        this.currentColor = lerpColor(baseColor, color(255,0,255), u);
-      } else {
-        this.state = "assimilating";
-        this.assimilationTimer = 0;
-        this.currentColor = color(255,0,255);
-      }
-    } else if (this.state === "assimilating") {
-      this.assimilationTimer += deltaTime;
-      if (this.assimilationTimer < 2000) {
-        let t = this.assimilationTimer / 2000;
-        this.currentColor = lerpColor(color(255,0,255), color(0,0,0), t);
-      } else {
-        this.state = "dead";
-        this.respawnTimer = 0;
-        this.currentColor = color(0,0,0);
-      }
-    } else if (this.state === "dead") {
-      this.respawnTimer += deltaTime;
-      if (this.respawnTimer > 7000) {
-        this.state = "healthy";
-        this.assimilationTimer = 0;
-        this.respawnTimer = 0;
-        abyssAccumulator = 0;
-        this.currentColor = color(255,215,0);
-      }
-    }
-  }
-
-  show() {
-    noStroke();
-    if (this.state === "dead") {
-      stroke(255,0,255);
-      strokeWeight(2);
-    }
-    fill(this.currentColor);
-    ellipse(this.pos.x, this.pos.y, this.radius * 2, this.radius * 2);
-    noStroke();
-  }
-}
-
-// ---------------- Tendril Class ----------------
-class Tendril {
-  constructor() {
-    let edge = floor(random(4));
-    if (edge === 0) { this.pos = createVector(random(width), 0); }
-    else if (edge === 1) { this.pos = createVector(width, random(height)); }
-    else if (edge === 2) { this.pos = createVector(random(width), height); }
-    else { this.pos = createVector(0, random(height)); }
-
-    this.vel = createVector(0, 0);
-    this.acc = createVector(0, 0);
-    this.maxSpeed = 3;
-    this.tail = [];
-    this.tailMax = 20;
-    this.boostTimer = 0;
-    this.immolating = false;
-    this.immolateTimer = 0;
-    this.immolateDuration = 2000;
-    this.dead = false;
-  }
-
-  autoHunt(targetPos) {
-    let force = p5.Vector.sub(targetPos, this.pos);
-    force.setMag(random(1, 2));
-    this.vel = force;
-  }
-
-  hunt(targetPos) {
-    this.boostTimer = 30;
-  }
-
-  orbit(targetPos, pullStrength) {
-    let desired = p5.Vector.sub(targetPos, this.pos);
-    let tangent = createVector(-desired.y, desired.x);
-    tangent.normalize();
-    tangent.mult(pullStrength);
-    desired.normalize();
-    desired.mult(pullStrength);
-    this.acc.add(p5.Vector.add(desired, tangent));
-  }
-
-  startImmolation() {
-    if (!this.immolating) {
-      this.immolating = true;
-      this.immolateTimer = 0;
-    }
-  }
-
-  update() {
-    if (!simulationRunning) return;
-
-    if (this.immolating) {
-      this.immolateTimer += deltaTime;
-      if (this.immolateTimer > this.immolateDuration) {
-        this.dead = true;
-      }
-    } else {
-      let d = p5.Vector.dist(this.pos, singularity.pos);
-      if (d > ORBIT_DISTANCE) {
-        let baseForce = p5.Vector.sub(singularity.pos, this.pos);
-        baseForce.setMag(0.05);
-        this.acc.add(baseForce);
-      }
-      if (this.boostTimer > 0) {
-        let boostForce = p5.Vector.sub(singularity.pos, this.pos);
-        boostForce.setMag(0.2);
-        this.acc.add(boostForce);
-        this.boostTimer--;
-      }
-      this.vel.add(this.acc);
-      this.vel.limit(this.maxSpeed * parseFloat(agroInput.value()));
-      this.pos.add(this.vel);
-      this.acc.mult(0);
-    }
-
-    this.tail.push(this.pos.copy());
-    if (this.tail.length > this.tailMax) {
-      this.tail.shift();
-    }
-  }
-
-  show() {
-    noStroke();
-    let drawColor;
-    if (this.immolating) {
-      if (this.immolateTimer < this.immolateDuration / 2) {
-        let amt = this.immolateTimer / (this.immolateDuration / 2);
-        drawColor = lerpColor(purpleColor, cyanColor, amt);
-      } else {
-        let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
-        drawColor = lerpColor(cyanColor, blackColor, amt);
-      }
-    } else {
-      drawColor = color(130, 0, 130);
-    }
-    fill(drawColor);
-    ellipse(this.pos.x, this.pos.y, 7, 7);
-
-    strokeWeight(1);
-    noFill();
-    beginShape();
-    for (let i = 0; i < this.tail.length; i++) {
-      let pos = this.tail[i];
-      let alpha = map(i, 0, this.tail.length, 0, 255);
-      stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
-      vertex(pos.x, pos.y);
-    }
-    endShape();
-  }
-}
-
-// ---------------- Explosion Effect ----------------
-function drawExplosion() {
-  push();
-  translate(singularity.pos.x, singularity.pos.y);
-  let steps = 5;
-  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
-
-  if (explosionType === "nova") {
-    stroke(0,255,255, alphaVal);
-  } else if (explosionType === "burst") {
-    stroke(255,215,0, alphaVal);
-  } else if (explosionType === "death") {
-    stroke(255,0,255, alphaVal);
-  } else {
-    stroke(255,215,0, alphaVal);
-  }
-
-  noFill();
-  for (let i = 0; i < 20; i++) {
-    push();
-    rotate(random(TWO_PI));
-    beginShape();
-    let len = random(20, 50);
-    vertex(0, 0);
-    for (let j = 0; j < steps; j++) {
-      let angle = random(-Math.PI/4, Math.PI/4);
-      let x = cos(angle) * len;
-      let y = sin(angle) * len;
-      vertex(x, y);
-    }
-    endShape();
-    pop();
-  }
-  pop();
-}
-
-// ---------------- Touch Controls ----------------
-function touchStarted() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    // If touch begins in left 30% of canvas, check for d-pad activation
-    if (t.x < width * 0.3) {
-      if (dist(t.x, t.y, dPadCenterX, dPadCenterY) < dPadRadius) {
-        dPadActive = true;
-      }
-    } else {
-      touchStartX = t.x;
-      touchStartY = t.y;
-    }
-  }
-  return false;
-}
-
-function touchMoved() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    if (dPadActive) {
-      let dx = t.x - dPadCenterX;
-      let dy = t.y - dPadCenterY;
-      singularity.pos.x += dx * 1.0;
-      singularity.pos.y += dy * 1.0;
-    } else {
-      let dx = t.x - touchStartX;
-      let dy = t.y - touchStartY;
-      singularity.pos.x += dx * 1.0;
-      singularity.pos.y += dy * 1.0;
-      touchStartX = t.x;
-      touchStartY = t.y;
-    }
-  }
-  return false;
-}
-
-function touchEnded() {
-  dPadActive = false;
-  return false;
-}
-
-// ---------------- Singularity Class ----------------
-class Singularity {
-  constructor(x, y) {
-    this.pos = createVector(x, y);
-    this.baseRadius = 15;
-    this.radius = this.baseRadius;
-    this.pulseSpeed = 0.05;
-    this.state = "healthy";
-    this.assimilationTimer = 0;
-    this.respawnTimer = 0;
-    this.currentColor = color(255,215,0);
-  }
-
-  update() {
-    if (this.state === "healthy") {
-      this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
-      let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
-      let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
-      let p = abyssAccumulator / ABSYSS_THRESHOLD;
-      if (p < 0.5) {
-        this.currentColor = baseColor;
-      } else if (p < 1) {
-        let u = (p - 0.5) / 0.5;
-        this.currentColor = lerpColor(baseColor, color(255,0,255), u);
-      } else {
-        this.state = "assimilating";
-        this.assimilationTimer = 0;
-        this.currentColor = color(255,0,255);
-      }
-    } else if (this.state === "assimilating") {
-      this.assimilationTimer += deltaTime;
-      if (this.assimilationTimer < 2000) {
-        let t = this.assimilationTimer / 2000;
-        this.currentColor = lerpColor(color(255,0,255), color(0,0,0), t);
-      } else {
-        this.state = "dead";
-        this.respawnTimer = 0;
-        this.currentColor = color(0,0,0);
-      }
-    } else if (this.state === "dead") {
-      this.respawnTimer += deltaTime;
-      if (this.respawnTimer > 7000) {
-        this.state = "healthy";
-        this.assimilationTimer = 0;
-        this.respawnTimer = 0;
-        abyssAccumulator = 0;
-        this.currentColor = color(255,215,0);
-      }
-    }
-  }
-
-  show() {
-    noStroke();
-    if (this.state === "dead") {
-      stroke(255,0,255);
-      strokeWeight(2);
-    }
-    fill(this.currentColor);
-    ellipse(this.pos.x, this.pos.y, this.radius * 2, this.radius * 2);
-    noStroke();
-  }
-}
-
-// ---------------- Tendril Class ----------------
-class Tendril {
-  constructor() {
-    let edge = floor(random(4));
-    if (edge === 0) { this.pos = createVector(random(width), 0); }
-    else if (edge === 1) { this.pos = createVector(width, random(height)); }
-    else if (edge === 2) { this.pos = createVector(random(width), height); }
-    else { this.pos = createVector(0, random(height)); }
-
-    this.vel = createVector(0, 0);
-    this.acc = createVector(0, 0);
-    this.maxSpeed = 3;
-    this.tail = [];
-    this.tailMax = 20;
-    this.boostTimer = 0;
-    this.immolating = false;
-    this.immolateTimer = 0;
-    this.immolateDuration = 2000;
-    this.dead = false;
-  }
-
-  autoHunt(targetPos) {
-    let force = p5.Vector.sub(targetPos, this.pos);
-    force.setMag(random(1, 2));
-    this.vel = force;
-  }
-
-  hunt(targetPos) {
-    this.boostTimer = 30;
-  }
-
-  orbit(targetPos, pullStrength) {
-    let desired = p5.Vector.sub(targetPos, this.pos);
-    let tangent = createVector(-desired.y, desired.x);
-    tangent.normalize();
-    tangent.mult(pullStrength);
-    desired.normalize();
-    desired.mult(pullStrength);
-    this.acc.add(p5.Vector.add(desired, tangent));
-  }
-
-  startImmolation() {
-    if (!this.immolating) {
-      this.immolating = true;
-      this.immolateTimer = 0;
-    }
-  }
-
-  update() {
-    if (!simulationRunning) return;
-
-    if (this.immolating) {
-      this.immolateTimer += deltaTime;
-      if (this.immolateTimer > this.immolateDuration) {
-        this.dead = true;
-      }
-    } else {
-      let d = p5.Vector.dist(this.pos, singularity.pos);
-      if (d > ORBIT_DISTANCE) {
-        let baseForce = p5.Vector.sub(singularity.pos, this.pos);
-        baseForce.setMag(0.05);
-        this.acc.add(baseForce);
-      }
-      if (this.boostTimer > 0) {
-        let boostForce = p5.Vector.sub(singularity.pos, this.pos);
-        boostForce.setMag(0.2);
-        this.acc.add(boostForce);
-        this.boostTimer--;
-      }
-      this.vel.add(this.acc);
-      this.vel.limit(this.maxSpeed * parseFloat(agroInput.value()));
-      this.pos.add(this.vel);
-      this.acc.mult(0);
-    }
-
-    this.tail.push(this.pos.copy());
-    if (this.tail.length > this.tailMax) {
-      this.tail.shift();
-    }
-  }
-
-  show() {
-    noStroke();
-    let drawColor;
-    if (this.immolating) {
-      if (this.immolateTimer < this.immolateDuration / 2) {
-        let amt = this.immolateTimer / (this.immolateDuration / 2);
-        drawColor = lerpColor(purpleColor, cyanColor, amt);
-      } else {
-        let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
-        drawColor = lerpColor(cyanColor, blackColor, amt);
-      }
-    } else {
-      drawColor = color(130, 0, 130);
-    }
-    fill(drawColor);
-    ellipse(this.pos.x, this.pos.y, 7, 7);
-
-    strokeWeight(1);
-    noFill();
-    beginShape();
-    for (let i = 0; i < this.tail.length; i++) {
-      let pos = this.tail[i];
-      let alpha = map(i, 0, this.tail.length, 0, 255);
-      stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
-      vertex(pos.x, pos.y);
-    }
-    endShape();
-  }
-}
-
-// ---------------- Explosion Effect ----------------
-function drawExplosion() {
-  push();
-  translate(singularity.pos.x, singularity.pos.y);
-  let steps = 5;
-  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
-
-  if (explosionType === "nova") {
-    stroke(0,255,255, alphaVal);
-  } else if (explosionType === "burst") {
-    stroke(255,215,0, alphaVal);
-  } else if (explosionType === "death") {
-    stroke(255,0,255, alphaVal);
-  } else {
-    stroke(255,215,0, alphaVal);
-  }
-
-  noFill();
-  for (let i = 0; i < 20; i++) {
-    push();
-    rotate(random(TWO_PI));
-    beginShape();
-    let len = random(20, 50);
-    vertex(0, 0);
-    for (let j = 0; j < steps; j++) {
-      let angle = random(-Math.PI/4, Math.PI/4);
-      let x = cos(angle) * len;
-      let y = sin(angle) * len;
-      vertex(x, y);
-    }
-    endShape();
-    pop();
-  }
-  pop();
-}
-
-// ---------------- Touch Controls ----------------
-function touchStarted() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    if (t.x < width * 0.3) {
-      if (dist(t.x, t.y, dPadCenterX, dPadCenterY) < dPadRadius) {
-        dPadActive = true;
-      }
-    } else {
-      touchStartX = t.x;
-      touchStartY = t.y;
-    }
-  }
-  return false;
-}
-
-function touchMoved() {
-  if (touches.length > 0) {
-    let t = touches[0];
-    if (dPadActive) {
-      let dx = t.x - dPadCenterX;
-      let dy = t.y - dPadCenterY;
-      singularity.pos.x += dx * 1.0;
-      singularity.pos.y += dy * 1.0;
-    } else {
-      let dx = t.x - touchStartX;
-      let dy = t.y - touchStartY;
-      singularity.pos.x += dx * 1.0;
-      singularity.pos.y += dy * 1.0;
-      touchStartX = t.x;
-      touchStartY = t.y;
-    }
-  }
-  return false;
-}
-
-function touchEnded() {
-  dPadActive = false;
-  return false;
-}
-
 // ---------------- D-Pad (On-Screen Buttons) ----------------
 function createDPad() {
-  let dPadCont = createDiv();
-  dPadCont.parent(container);
-  dPadCont.style("position", "absolute");
-  dPadCont.style("bottom", "150px");
-  dPadCont.style("left", "10px");
-  dPadCont.style("display", "flex");
-  dPadCont.style("flex-direction", "column");
-  dPadCont.style("align-items", "center");
-  dPadCont.style("gap", "5px");
+  dPadContainer = createDiv();
+  dPadContainer.parent(container);
+  dPadContainer.style("position", "absolute");
+  dPadContainer.style("bottom", "100px"); // Adjust as needed
+  dPadContainer.style("left", "10px");
+  dPadContainer.style("display", "flex");
+  dPadContainer.style("flex-direction", "column");
+  dPadContainer.style("align-items", "center");
+  dPadContainer.style("gap", "5px");
 
   // Row 1: Up button
   let dPadRow1 = createDiv();
-  dPadRow1.parent(dPadCont);
+  dPadRow1.parent(dPadContainer);
   dPadRow1.style("display", "flex");
   dPadRow1.style("justify-content", "center");
   dPadUp = createButton("↑");
@@ -1347,7 +498,7 @@ function createDPad() {
 
   // Row 2: Left and Right buttons
   let dPadRow2 = createDiv();
-  dPadRow2.parent(dPadCont);
+  dPadRow2.parent(dPadContainer);
   dPadRow2.style("display", "flex");
   dPadRow2.style("justify-content", "space-between");
   dPadLeft = createButton("←");
@@ -1356,6 +507,7 @@ function createDPad() {
   dPadLeft.style("padding", "5px 10px");
   dPadLeft.mousePressed(() => { dPadDirection.set(-1, dPadDirection.y); });
   dPadLeft.mouseReleased(() => { dPadDirection.x = 0; });
+
   dPadRight = createButton("→");
   dPadRight.parent(dPadRow2);
   dPadRight.style("font-size", "18px");
@@ -1365,7 +517,7 @@ function createDPad() {
 
   // Row 3: Down button
   let dPadRow3 = createDiv();
-  dPadRow3.parent(dPadCont);
+  dPadRow3.parent(dPadContainer);
   dPadRow3.style("display", "flex");
   dPadRow3.style("justify-content", "center");
   dPadDown = createButton("↓");
@@ -1378,222 +530,11 @@ function createDPad() {
   dPadDirection = createVector(0, 0);
 }
 
-createDPad();
-
-// ---------------- Singularity Class ----------------
-class Singularity {
-  constructor(x, y) {
-    this.pos = createVector(x, y);
-    this.baseRadius = 15;
-    this.radius = this.baseRadius;
-    this.pulseSpeed = 0.05;
-    this.state = "healthy";
-    this.assimilationTimer = 0;
-    this.respawnTimer = 0;
-    this.currentColor = color(255,215,0);
-  }
-
-  update() {
-    if (this.state === "healthy") {
-      this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
-      let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
-      let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
-      let p = abyssAccumulator / ABSYSS_THRESHOLD;
-      if (p < 0.5) {
-        this.currentColor = baseColor;
-      } else if (p < 1) {
-        let u = (p - 0.5) / 0.5;
-        this.currentColor = lerpColor(baseColor, color(255,0,255), u);
-      } else {
-        this.state = "assimilating";
-        this.assimilationTimer = 0;
-        this.currentColor = color(255,0,255);
-      }
-    } else if (this.state === "assimilating") {
-      this.assimilationTimer += deltaTime;
-      if (this.assimilationTimer < 2000) {
-        let t = this.assimilationTimer / 2000;
-        this.currentColor = lerpColor(color(255,0,255), color(0,0,0), t);
-      } else {
-        this.state = "dead";
-        this.respawnTimer = 0;
-        this.currentColor = color(0,0,0);
-      }
-    } else if (this.state === "dead") {
-      this.respawnTimer += deltaTime;
-      if (this.respawnTimer > 7000) {
-        this.state = "healthy";
-        this.assimilationTimer = 0;
-        this.respawnTimer = 0;
-        abyssAccumulator = 0;
-        this.currentColor = color(255,215,0);
-      }
-    }
-  }
-
-  show() {
-    noStroke();
-    if (this.state === "dead") {
-      stroke(255,0,255);
-      strokeWeight(2);
-    }
-    fill(this.currentColor);
-    ellipse(this.pos.x, this.pos.y, this.radius * 2, this.radius * 2);
-    noStroke();
-  }
-}
-
-// ---------------- Tendril Class ----------------
-class Tendril {
-  constructor() {
-    let edge = floor(random(4));
-    if (edge === 0) { this.pos = createVector(random(width), 0); }
-    else if (edge === 1) { this.pos = createVector(width, random(height)); }
-    else if (edge === 2) { this.pos = createVector(random(width), height); }
-    else { this.pos = createVector(0, random(height)); }
-
-    this.vel = createVector(0, 0);
-    this.acc = createVector(0, 0);
-    this.maxSpeed = 3;
-    this.tail = [];
-    this.tailMax = 20;
-    this.boostTimer = 0;
-    this.immolating = false;
-    this.immolateTimer = 0;
-    this.immolateDuration = 2000;
-    this.dead = false;
-  }
-
-  autoHunt(targetPos) {
-    let force = p5.Vector.sub(targetPos, this.pos);
-    force.setMag(random(1, 2));
-    this.vel = force;
-  }
-
-  hunt(targetPos) {
-    this.boostTimer = 30;
-  }
-
-  orbit(targetPos, pullStrength) {
-    let desired = p5.Vector.sub(targetPos, this.pos);
-    let tangent = createVector(-desired.y, desired.x);
-    tangent.normalize();
-    tangent.mult(pullStrength);
-    desired.normalize();
-    desired.mult(pullStrength);
-    this.acc.add(p5.Vector.add(desired, tangent));
-  }
-
-  startImmolation() {
-    if (!this.immolating) {
-      this.immolating = true;
-      this.immolateTimer = 0;
-    }
-  }
-
-  update() {
-    if (!simulationRunning) return;
-
-    if (this.immolating) {
-      this.immolateTimer += deltaTime;
-      if (this.immolateTimer > this.immolateDuration) {
-        this.dead = true;
-      }
-    } else {
-      let d = p5.Vector.dist(this.pos, singularity.pos);
-      if (d > ORBIT_DISTANCE) {
-        let baseForce = p5.Vector.sub(singularity.pos, this.pos);
-        baseForce.setMag(0.05);
-        this.acc.add(baseForce);
-      }
-      if (this.boostTimer > 0) {
-        let boostForce = p5.Vector.sub(singularity.pos, this.pos);
-        boostForce.setMag(0.2);
-        this.acc.add(boostForce);
-        this.boostTimer--;
-      }
-      this.vel.add(this.acc);
-      this.vel.limit(this.maxSpeed * parseFloat(agroInput.value()));
-      this.pos.add(this.vel);
-      this.acc.mult(0);
-    }
-
-    this.tail.push(this.pos.copy());
-    if (this.tail.length > this.tailMax) {
-      this.tail.shift();
-    }
-  }
-
-  show() {
-    noStroke();
-    let drawColor;
-    if (this.immolating) {
-      if (this.immolateTimer < this.immolateDuration / 2) {
-        let amt = this.immolateTimer / (this.immolateDuration / 2);
-        drawColor = lerpColor(purpleColor, cyanColor, amt);
-      } else {
-        let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
-        drawColor = lerpColor(cyanColor, blackColor, amt);
-      }
-    } else {
-      drawColor = color(130, 0, 130);
-    }
-    fill(drawColor);
-    ellipse(this.pos.x, this.pos.y, 7, 7);
-
-    strokeWeight(1);
-    noFill();
-    beginShape();
-    for (let i = 0; i < this.tail.length; i++) {
-      let pos = this.tail[i];
-      let alpha = map(i, 0, this.tail.length, 0, 255);
-      stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
-      vertex(pos.x, pos.y);
-    }
-    endShape();
-  }
-}
-
-// ---------------- Explosion Effect ----------------
-function drawExplosion() {
-  push();
-  translate(singularity.pos.x, singularity.pos.y);
-  let steps = 5;
-  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
-
-  if (explosionType === "nova") {
-    stroke(0,255,255, alphaVal);
-  } else if (explosionType === "burst") {
-    stroke(255,215,0, alphaVal);
-  } else if (explosionType === "death") {
-    stroke(255,0,255, alphaVal);
-  } else {
-    stroke(255,215,0, alphaVal);
-  }
-
-  noFill();
-  for (let i = 0; i < 20; i++) {
-    push();
-    rotate(random(TWO_PI));
-    beginShape();
-    let len = random(20, 50);
-    vertex(0, 0);
-    for (let j = 0; j < steps; j++) {
-      let angle = random(-Math.PI/4, Math.PI/4);
-      let x = cos(angle) * len;
-      let y = sin(angle) * len;
-      vertex(x, y);
-    }
-    endShape();
-    pop();
-  }
-  pop();
-}
-
 // ---------------- Touch Controls ----------------
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
+    // If touch begins in left 30% of canvas, check for d-pad activation
     if (t.x < width * 0.3) {
       if (dist(t.x, t.y, dPadCenterX, dPadCenterY) < dPadRadius) {
         dPadActive = true;
@@ -1612,6 +553,7 @@ function touchMoved() {
     if (dPadActive) {
       let dx = t.x - dPadCenterX;
       let dy = t.y - dPadCenterY;
+      // Moved from 0.05 to 1.0 for responsiveness
       singularity.pos.x += dx * 1.0;
       singularity.pos.y += dy * 1.0;
     } else {
