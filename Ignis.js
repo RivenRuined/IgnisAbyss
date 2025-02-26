@@ -2,15 +2,14 @@ console.log("Ignis.js loaded and running!!!");
 
 /*
   Ignis x Abyss – Life x Death
-  Final version:
+  Updated to fix "cnv.style is not a function" by referencing cnv.elt.style(...).
 
   1) Auto-screens on load (createCanvas(windowWidth, windowHeight)).
-  2) Resizes on windowResized() → matches the new window size.
+  2) Resizes on windowResized() → matches new window size (if "Auto" is enabled).
   3) "PC" (1200×900), "Mobile" (360×640), "Tablet" (768×1024), and "Auto" buttons near D-Pad.
   4) Walls: tendrils bounce off screen edges (brick-breaker style).
   5) One slider: "Speed."
-  6) Orbit Slowing: each tendril in orbit reduces final speed. If speed ≤ 0, the singularity is stuck 
-     until the user kills/repels some tendrils with Nova/Burst.
+  6) Orbit Slowing: each tendril in orbit reduces final speed. If speed hits 0, singularity is "stuck" until user uses Burst/Nova.
 */
 
 // -------------------------------------------------------------------
@@ -31,7 +30,7 @@ class Singularity {
 
   update() {
     if (this.state === "healthy") {
-      // Pulsate color from gold to orange
+      // Pulsate from gold to orange
       this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
       let t = (sin(frameCount * this.pulseSpeed) + 1) / 2;
       let baseColor = lerpColor(color(255,215,0), color(255,140,0), t);
@@ -111,7 +110,7 @@ class Tendril {
   }
 
   hunt(targetPos) {
-    this.boostTimer = 30;
+    this.boostTimer = 30; // short hunt boost
   }
 
   orbit(targetPos, pullStrength) {
@@ -135,15 +134,15 @@ class Tendril {
     if (!simulationRunning) return;
 
     if (this.immolating) {
+      // Dying
       this.immolateTimer += deltaTime;
       if (this.immolateTimer > this.immolateDuration) {
         this.dead = true;
       }
     } else {
-      // Movement speed depends on the "Agro" slider
+      // Movement speed from the single "Speed" slider
       let simSpeed = speedSlider.value(); 
-      // But note we'll do orbit slowdown on the singularity side, not here.
-      // We'll do bounce off walls:
+      // Brick-breaker style bounce off walls
       if (this.pos.x < 0) {
         this.pos.x = 0; 
         this.vel.x *= -1;
@@ -159,7 +158,6 @@ class Tendril {
         this.vel.y *= -1;
       }
 
-      // base orbit logic
       if (this.boostTimer > 0) {
         let boostForce = p5.Vector.sub(singularity.pos, this.pos);
         boostForce.setMag(0.2);
@@ -231,7 +229,6 @@ let lastNovaTime = 0;
 let explosionTimer = 0;
 let explosionDuration = 500;
 let explosionType = "none";
-
 let deathBurstCount = 0;
 let deathBurstInterval = 300;
 let deathBurstTimer = 0;
@@ -241,33 +238,26 @@ let tendrils = [];
 let singularity;
 let simulationRunning = true;
 
-// Sliders
-let speedSlider; // The single "Speed" slider
+let speedSlider; // single "Speed" slider
 
-// D-Pad
 let dPadUp, dPadDown, dPadLeft, dPadRight;
 let dPadDirection;
 let dPadActive = false;
 let touchStartX = 0;
 let touchStartY = 0;
 
-// HUD & Canvas
 let container, cnv, controlPanel;
 let huntMeter, abyssMeter, novaMeter, novaCooldownMeter;
 
-// For toggling auto-resize
-let autoResize = true;
+let autoResize = true; // if true => auto-resize on windowResized()
 
-// -------------------------------------------------------------------
-// 3) Setup & Draw
-// -------------------------------------------------------------------
 function setup() {
-  // ***Define color variables***
+  // Assign color variables
   purpleColor = color(130, 0, 130);
   cyanColor   = color(0, 255, 255);
   blackColor  = color(0, 0, 0);
 
-  // Create the container & auto-sized canvas
+  // Create container
   container = createDiv();
   container.style("display", "flex");
   container.style("flex-direction", "column");
@@ -279,10 +269,13 @@ function setup() {
   container.style("max-width", "100%");
   container.parent(document.body);
 
-  createCanvas(windowWidth, windowHeight);
-  cnv = canvas;
-  cnv.style("position", "relative");
-  cnv.style("z-index", "0");
+  // Create auto-sized canvas
+  cnv = createCanvas(windowWidth, windowHeight);
+  cnv.parent(container);
+
+  // Here's the fix: we reference cnv.elt.style, not cnv.style
+  cnv.elt.style.position = "relative";
+  cnv.elt.style.zIndex = "0";
 
   createHUD();
   resetSimulation();
@@ -291,24 +284,22 @@ function setup() {
 function draw() {
   background(0);
 
-  // 1) Count how many tendrils orbit
+  // Count how many are in orbit
   let countOrbit = 0;
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
     if (d < ORBIT_DISTANCE) countOrbit++;
   }
 
-  // 2) Effective Speed = speedSlider.value() - orbit slow
+  // finalSpeed = baseSpeed - orbit slowdown
   let baseSpeed = speedSlider.value();
-  let orbitSlow = countOrbit * 0.05; 
+  let orbitSlow = countOrbit * 0.05;
   let finalSpeed = max(0, baseSpeed - orbitSlow);
 
-  // If finalSpeed == 0 => "stuck" => can't move
-  // We'll handle that in handleKeyboard() + D-Pad logic
-
+  // If finalSpeed=0 => "stuck"
   handleKeyboard(finalSpeed);
 
-  // D-Pad movement
+  // D-Pad
   if (dPadDirection.x !== 0 || dPadDirection.y !== 0) {
     if (finalSpeed > 0) {
       singularity.pos.x += dPadDirection.x * finalSpeed;
@@ -316,7 +307,6 @@ function draw() {
     }
   }
 
-  // Timers
   spawnTimer += deltaTime;
   if (spawnTimer > SPAWN_INTERVAL) {
     spawnTendrils(10);
@@ -343,7 +333,7 @@ function draw() {
   }
   novaCooldownMeter.attribute("value", novaCooldown.toString());
 
-  // Singularity update
+  // Singularity
   singularity.update();
   singularity.show();
 
@@ -364,7 +354,7 @@ function draw() {
     singularity.assimilationTimer = 0;
     abyssAccumulator = 0;
     explosionType = "death";
-    explosionTimer = explosionDuration;
+    explosionTimer = 500;
     deathBurstCount = 5;
     deathBurstTimer = 0;
   }
@@ -374,7 +364,7 @@ function draw() {
     deathBurstTimer += deltaTime;
     if (deathBurstTimer >= deathBurstInterval) {
       explosionType = "death";
-      explosionTimer = explosionDuration;
+      explosionTimer = 500;
       deathBurstTimer = 0;
       deathBurstCount--;
     }
@@ -388,16 +378,12 @@ function draw() {
   }
 }
 
-// Window resized => if autoResize is true, do it
 function windowResized() {
   if (autoResize) {
     resizeCanvas(windowWidth, windowHeight);
   }
 }
 
-// -------------------------------------------------------------------
-// 4) Setup Helpers
-// -------------------------------------------------------------------
 function createHUD() {
   controlPanel = createDiv();
   controlPanel.parent(container);
@@ -538,7 +524,7 @@ function createHUD() {
   row5.style("justify-content", "center");
   row5.style("align-items", "flex-start");
 
-  // Left side: D-Pad
+  // D-Pad
   let dPadContainer = createDiv();
   dPadContainer.parent(row5);
   dPadContainer.style("display", "flex");
@@ -590,7 +576,7 @@ function createHUD() {
 
   dPadDirection = createVector(0, 0);
 
-  // Right side: Preset Buttons
+  // Preset Buttons
   let presetContainer = createDiv();
   presetContainer.parent(row5);
   presetContainer.style("display", "flex");
@@ -623,9 +609,25 @@ function createHUD() {
   });
 }
 
-// -------------------------------------------------------------------
-// 5) The rest of the logic
-// -------------------------------------------------------------------
+function handleKeyboard(finalSpeed) {
+  // If finalSpeed=0 => stuck => no movement
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) {
+    if (finalSpeed > 0) singularity.pos.x -= finalSpeed;
+  }
+  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) {
+    if (finalSpeed > 0) singularity.pos.x += finalSpeed;
+  }
+  if (keyIsDown(UP_ARROW) || keyIsDown(87)) {
+    if (finalSpeed > 0) singularity.pos.y -= finalSpeed;
+  }
+  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) {
+    if (finalSpeed > 0) singularity.pos.y += finalSpeed;
+  }
+
+  singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
+  singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
+}
+
 function resetSimulation() {
   simulationRunning = true;
   explosionTimer = 0;
@@ -656,25 +658,6 @@ function spawnTendrils(n = 1) {
   }
 }
 
-function handleKeyboard(finalSpeed) {
-  // If finalSpeed is 0 => stuck
-  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) {
-    if (finalSpeed > 0) singularity.pos.x -= finalSpeed;
-  }
-  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) {
-    if (finalSpeed > 0) singularity.pos.x += finalSpeed;
-  }
-  if (keyIsDown(UP_ARROW) || keyIsDown(87)) {
-    if (finalSpeed > 0) singularity.pos.y -= finalSpeed;
-  }
-  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) {
-    if (finalSpeed > 0) singularity.pos.y += finalSpeed;
-  }
-
-  singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
-  singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
-}
-
 function keyReleased() {
   if (keyCode === 32) triggerRepel(); // SPACE
   if (keyCode === 86 && novaCooldown <= 0) { // V
@@ -683,7 +666,6 @@ function keyReleased() {
   }
 }
 
-// Buttons
 function triggerHunt() {
   for (let t of tendrils) t.hunt(singularity.pos);
 }
@@ -726,11 +708,9 @@ function triggerNovaBurst() {
   lastNovaTime = millis();
 }
 
-// Touch
 function touchStarted() {
   if (touches.length > 0) {
     let t = touches[0];
-    // If x < 30% => D-Pad
     if (t.x < width * 0.3) {
       dPadActive = true;
     } else {
@@ -765,7 +745,6 @@ function touchEnded() {
   dPadActive = false;
 }
 
-// Explosion
 function drawExplosion() {
   push();
   translate(singularity.pos.x, singularity.pos.y);
@@ -801,7 +780,7 @@ function drawExplosion() {
   pop();
 }
 
-// Window resized => if autoResize is true, we do it
+// For auto/manual resizing
 function windowResized() {
   if (autoResize) {
     resizeCanvas(windowWidth, windowHeight);
