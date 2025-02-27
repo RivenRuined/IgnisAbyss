@@ -1,4 +1,4 @@
-console.log("Ignis.js loaded and running!!!");
+console.log("Ignis.js loaded and running!");
 
 /*
   Ignis x Abyss – Life x Death
@@ -187,6 +187,7 @@ class Tendril {
     noStroke();
     let drawColor;
     if (this.immolating) {
+      // fade from purple->cyan->black
       if (this.immolateTimer < this.immolateDuration/2) {
         let amt = this.immolateTimer/(this.immolateDuration/2);
         drawColor = lerpColor(purpleColor, cyanColor, amt);
@@ -233,12 +234,14 @@ let tendrils = [];
 let singularity;
 let simulationRunning = true;
 
+// Sliders
 let agroSlider, gravitySlider, speedSlider, movementSlider;
 let dPadDirection;
 let dPadActive = false;
 let touchStartX=0, touchStartY=0;
 let wallsOn = false, autoMode = true;
 
+// Meters
 let controlPanel, huntMeter, abyssMeter;
 let autoNovaMeter, superNovaMeter;
 
@@ -632,7 +635,6 @@ function handleKeyboard(finalSpeed) {
   if (keyIsDown(UP_ARROW) || keyIsDown(87))    singularity.pos.y -= finalSpeed;
   if (keyIsDown(DOWN_ARROW) || keyIsDown(83))  singularity.pos.y += finalSpeed;
 
-  // clamp
   singularity.pos.x=constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
   singularity.pos.y=constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
 }
@@ -698,4 +700,88 @@ function triggerSuperNova() {
 
 function getOrbitCount() {
   let c=0;
-  for (let t of ten
+  for (let t of tendrils) {
+    let d=p5.Vector.dist(t.pos, singularity.pos);
+    if (d<ORBIT_DISTANCE) c++;
+  }
+  return c;
+}
+
+// Touch
+function touchStarted() {
+  if (touches.length>0) {
+    let t=touches[0];
+    if (t.x<width*0.3) {
+      dPadActive=true;
+    } else {
+      touchStartX=t.x;
+      touchStartY=t.y;
+    }
+  }
+}
+
+function touchMoved() {
+  // Movement => "movementSlider"
+  if (touches.length>0) {
+    let t=touches[0];
+    if (dPadActive) {
+      let dx=t.x - 80;
+      let dy=t.y - 820;
+      let factor=movementSlider.value();
+      singularity.pos.x+=dx*factor;
+      singularity.pos.y+=dy*factor;
+    } else {
+      let dx=t.x - touchStartX;
+      let dy=t.y - touchStartY;
+      let factor=movementSlider.value();
+      singularity.pos.x+=dx*factor;
+      singularity.pos.y+=dy*factor;
+      touchStartX=t.x;
+      touchStartY=t.y;
+    }
+  }
+  return false;
+}
+
+function touchEnded() {
+  dPadActive=false;
+}
+
+function drawExplosion() {
+  push();
+  translate(singularity.pos.x, singularity.pos.y);
+  let steps=5;
+  let alphaVal=map(explosionTimer,0,explosionDuration,0,255);
+
+  if (explosionType==="nova") {
+    stroke(0,255,255, alphaVal);
+  } else if (explosionType==="burst") {
+    stroke(255,215,0, alphaVal);
+  } else if (explosionType==="death") {
+    stroke(255,0,255, alphaVal);
+  } else if (explosionType==="supernova") {
+    stroke(0,255,255, alphaVal);
+  } else {
+    stroke(255,215,0, alphaVal);
+  }
+
+  noFill();
+  for (let i=0; i<20; i++){
+    push();
+    rotate(random(TWO_PI));
+    beginShape();
+    let len=random(20,50);
+    vertex(0,0);
+    for (let j=0; j<steps; j++){
+      let angle=random(-Math.PI/4,Math.PI/4);
+      let x=cos(angle)*len;
+      let y=sin(angle)*len;
+      vertex(x,y);
+    }
+    endShape();
+    pop();
+  }
+  pop();
+}
+
+// End of Ignis.js (Make sure you copied everything!)
