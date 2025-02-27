@@ -1,4 +1,4 @@
-console.log("Ignis.js loaded and running!!!");
+console.log("Ignis.js loaded and running!");
 
 /*
   Ignis x Abyss – Life x Death
@@ -12,26 +12,25 @@ console.log("Ignis.js loaded and running!!!");
          • Dying (Purple, 76–99%): multiplier = 0.5
          • Dead (Black, ≥100%): multiplier = 0
   2) Attacks:
-     - Burst (Space key or Burst button): repel with a gold explosion.
+     - Burst (Space or Burst button): repel with gold explosion.
      - Nova Pulse: automatically triggers every ~3s, killing up to 5 tendrils in orbit.
-     - SuperNova: a meter fills over 10s; when full, user can trigger it (button or V key) to kill all tendrils in orbit.
+     - SuperNova: meter fills over 10s; when full, user triggers it (button or V key) to kill all tendrils.
   3) Assimilation:
-     - When 3+ tendrils are in orbit, the assimilation meter increases.
-     - If fewer than 3 remain, the meter decays gradually.
-     - The assimilation meter determines health and thus the movement multiplier.
-     - When the meter reaches 100% (≥ABSYSS_THRESHOLD), the Singularity “dies” (movement multiplier = 0) and a death explosion (pink) is triggered repeatedly.
-  4) HUD includes buttons for Burst, Nova, and sliders for Agro, Gravity, and Movement.
+     - If ≥3 tendrils orbit the Singularity, the assimilation meter increases continuously.
+     - Otherwise, it decays gradually.
+     - Health is computed from abyssAccumulator / ABSYSS_THRESHOLD.
+  4) HUD: Buttons for Spawn, Hunt, Burst, Nova; Sliders for Agro, Gravity, and Movement.
   5) Walls toggle and screen presets remain.
 */
 
 // Thresholds/timings
-const AUTO_NOVA_THRESHOLD = 3000;   // 3s for Auto Nova Pulse (kills up to 5)
-const SUPERNOVA_THRESHOLD = 10000;  // 10s for SuperNova (user-triggered)
-const ORBIT_DISTANCE = 50;
-const ABSYSS_THRESHOLD = 13000;
-const HUNT_THRESHOLD = 5000;
-const SPAWN_INTERVAL = 5000;
-const explosionDuration = 500;
+const AUTO_NOVA_THRESHOLD    = 3000;   // 3s: Auto Nova Pulse (kills up to 5)
+const SUPERNOVA_THRESHOLD    = 10000;  // 10s: SuperNova (user triggered)
+const ORBIT_DISTANCE         = 50;
+const ABSYSS_THRESHOLD       = 13000;
+const HUNT_THRESHOLD         = 5000;
+const SPAWN_INTERVAL         = 5000;
+const explosionDuration      = 500;
 
 // -------------------------------------------------------------------
 // 1) Classes
@@ -42,15 +41,14 @@ class Singularity {
     this.baseRadius = 15;
     this.radius = this.baseRadius;
     this.pulseSpeed = 0.05;
-    // Health states determined by assimilation fraction:
-    // "healthy" (Gold), "injured" (Pink), "dying" (Purple), "dead" (Black)
-    this.state = "healthy";
+    // Health state based solely on assimilation fraction.
+    this.state = "healthy"; // "healthy", "injured", "dying", "dead"
     this.currentColor = color(255,215,0); // gold
     this.movementMultiplier = 1.0;
   }
 
   update() {
-    // Calculate assimilation fraction (0 to 1+)
+    // Compute assimilation fraction
     let frac = abyssAccumulator / ABSYSS_THRESHOLD;
     if (frac <= 0.5) {
       this.state = "healthy";
@@ -68,7 +66,7 @@ class Singularity {
       this.state = "dead";
       this.currentColor = color(0,0,0); // black
       this.movementMultiplier = 0;
-      // Trigger death explosion repeatedly if not already triggered
+      // Trigger repeated death explosion if not already active.
       if (deathBurstCount === 0) {
         explosionType = "death";
         explosionTimer = explosionDuration;
@@ -76,7 +74,7 @@ class Singularity {
         deathBurstTimer = 0;
       }
     }
-    // Pulsate if not dead
+    // Pulsate only if not dead.
     if (this.state !== "dead") {
       this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
     }
@@ -89,7 +87,7 @@ class Singularity {
       strokeWeight(2);
     }
     fill(this.currentColor);
-    ellipse(this.pos.x, this.pos.y, this.radius * 2, this.radius * 2);
+    ellipse(this.pos.x, this.pos.y, this.radius*2, this.radius*2);
     noStroke();
   }
 }
@@ -204,8 +202,8 @@ class Tendril {
 // 2) Global Variables
 // -------------------------------------------------------------------
 let TENDRIL_COUNT = 20;
-let autoNovaTimer = 0;    // Auto Nova pulse timer (~3s)
-let superNovaTimer = 0;   // SuperNova meter timer (~10s)
+let autoNovaTimer = 0;    // Auto Nova timer (~3s)
+let superNovaTimer = 0;   // SuperNova timer (~10s)
 let huntTimer = 0;
 let abyssAccumulator = 0;
 let spawnTimer = 0;
@@ -219,10 +217,9 @@ let tendrils = [];
 let singularity;
 let simulationRunning = true;
 
-// Sliders – Only one "Movement" slider now (used for both keyboard and touch).
+// Sliders – Only one "Movement" slider now.
 let agroSlider, gravitySlider, movementSlider;
 
-// Walls toggle, auto mode, etc.
 let wallsOn = false, autoMode = true;
 
 // HUD Meters
@@ -244,11 +241,11 @@ function setup() {
 function draw() {
   background(0);
 
-  // Movement: effective speed = movement slider value × Singularity's health multiplier.
-  let moveSpeed = movementSlider.value() * singularity.movementMultiplier;
-  handleKeyboard(moveSpeed);
+  // 1) Movement: effective speed = movementSlider × health multiplier.
+  let effectiveSpeed = movementSlider.value() * singularity.movementMultiplier;
+  handleKeyboard(effectiveSpeed);
 
-  // Auto Nova: every ~3s, kill up to 5 tendrils.
+  // 2) Auto Nova: every ~3s, kill up to 5 tendrils.
   autoNovaTimer += deltaTime;
   if (autoNovaTimer >= AUTO_NOVA_THRESHOLD) {
     triggerAutoNovaPulse();
@@ -256,14 +253,14 @@ function draw() {
   }
   autoNovaMeter.attribute("value", autoNovaTimer.toString());
 
-  // SuperNova: fills over 10s and remains full until triggered.
+  // 3) SuperNova: fills over 10s; remains full until triggered.
   if (superNovaTimer < SUPERNOVA_THRESHOLD) {
     superNovaTimer += deltaTime;
     if (superNovaTimer > SUPERNOVA_THRESHOLD) superNovaTimer = SUPERNOVA_THRESHOLD;
   }
   superNovaMeter.attribute("value", superNovaTimer.toString());
 
-  // Hunt Timer
+  // 4) Hunt Timer
   huntTimer += deltaTime;
   if (huntTimer >= HUNT_THRESHOLD) {
     triggerHunt();
@@ -271,14 +268,14 @@ function draw() {
   }
   huntMeter.attribute("value", huntTimer.toString());
 
-  // Assimilation: Increase only if at least 3 tendrils are in orbit; else decay gradually.
-  if (getOrbitCount() >= 3 && singularity.state === "healthy") {
+  // 5) Assimilation: Increase if ≥3 tendrils in orbit; otherwise decay.
+  if (getOrbitCount() >= 3) {
     abyssAccumulator += deltaTime;
   } else {
     abyssAccumulator = max(0, abyssAccumulator - deltaTime * 0.5);
   }
-  // When assimilation reaches threshold, Singularity dies.
-  if (abyssAccumulator >= ABSYSS_THRESHOLD && singularity.state === "healthy") {
+  // When assimilation reaches threshold, singularity "dies".
+  if (abyssAccumulator >= ABSYSS_THRESHOLD) {
     singularity.state = "dead";
     explosionType = "death";
     explosionTimer = explosionDuration;
@@ -288,7 +285,7 @@ function draw() {
   }
   abyssMeter.attribute("value", abyssAccumulator.toString());
 
-  if ((singularity.state === "dead") && deathBurstCount > 0) {
+  if (singularity.state === "dead" && deathBurstCount > 0) {
     deathBurstTimer += deltaTime;
     if (deathBurstTimer >= 300) {
       explosionType = "death";
@@ -298,17 +295,16 @@ function draw() {
     }
   }
 
-  // Spawning new tendrils
+  // 6) Spawning
   spawnTimer += deltaTime;
   if (spawnTimer > SPAWN_INTERVAL) {
     spawnTendrils(10);
     spawnTimer = 0;
   }
 
-  // Update and display Singularity and Tendrils
+  // 7) Update & Show Singularity and Tendrils
   singularity.update();
   singularity.show();
-
   for (let t of tendrils) {
     let d = p5.Vector.dist(t.pos, singularity.pos);
     if (d < ORBIT_DISTANCE) {
@@ -319,7 +315,7 @@ function draw() {
   }
   tendrils = tendrils.filter(t => !t.dead);
 
-  // Explosion effect
+  // 8) Explosion Effect
   if (explosionTimer > 0) {
     drawExplosion();
     explosionTimer -= deltaTime;
@@ -334,7 +330,7 @@ function windowResized() {
 }
 
 // -------------------------------------------------------------------
-// 4) HUD – Updated: No D-Pad; one Movement slider; labels updated.
+// 4) HUD – Updated: D-Pad removed; 3 sliders: Agro, Gravity, Movement.
 // -------------------------------------------------------------------
 function createHUD_Bottom() {
   controlPanel = createDiv();
@@ -350,7 +346,7 @@ function createHUD_Bottom() {
   controlPanel.style("z-index", "9999");
   controlPanel.parent(document.body);
 
-  // Row1: Attack Buttons: Spawn, Hunt, Burst, Nova
+  // Row1: Buttons – Spawn, Hunt, Burst, Nova
   let row1 = createDiv();
   row1.parent(controlPanel);
   row1.style("display", "flex");
@@ -390,7 +386,7 @@ function createHUD_Bottom() {
   burstBtn.style("color", "#FFD700");
   novaBtn.style("color", "#00FFFF");
 
-  // Row2: Sliders: Agro, Gravity, Movement
+  // Row2: Sliders – Agro, Gravity, Movement
   let row2 = createDiv();
   row2.parent(controlPanel);
   row2.style("display", "flex");
@@ -411,7 +407,7 @@ function createHUD_Bottom() {
   movementSlider.parent(row2);
   movementSlider.style("width", "100px");
 
-  // Row3: Labels for Sliders
+  // Row3: Labels
   let row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
@@ -435,7 +431,7 @@ function createHUD_Bottom() {
   moveLabel.style("font-size", "14px");
   moveLabel.style("color", "#CCCCCC");
 
-  // Row4: Meters: AutoNova & SuperNova (cyan)
+  // Row4: Meters – AutoNova & SuperNova (cyan)
   let row4 = createDiv();
   row4.parent(controlPanel);
   row4.style("display", "flex");
@@ -559,7 +555,7 @@ function spawnTendrils(n = 1) {
   }
 }
 
-// Movement: WASD/Arrow keys; effective speed = movementSlider * health multiplier.
+// Movement: WASD/Arrow keys; effective speed = movementSlider × health multiplier.
 function handleKeyboard(finalSpeed) {
   if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= finalSpeed;
   if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += finalSpeed;
@@ -571,7 +567,9 @@ function handleKeyboard(finalSpeed) {
 
 function keyReleased() {
   // Space => Burst
-  if (keyCode === 32) triggerRepel();
+  if (keyCode === 32) {
+    triggerRepel();
+  }
   // V => SuperNova only if meter is full
   if (keyCode === 86) {
     if (superNovaTimer >= SUPERNOVA_THRESHOLD) {
@@ -649,7 +647,6 @@ function touchMoved() {
     let t = touches[0];
     let dx = t.x - touchStartX;
     let dy = t.y - touchStartY;
-    // Effective movement: movement slider * health multiplier.
     let factor = movementSlider.value() * singularity.movementMultiplier;
     singularity.pos.x += dx * factor;
     singularity.pos.y += dy * factor;
@@ -669,7 +666,6 @@ function drawExplosion() {
   let steps = 5;
   let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
   if (explosionType === "burst") {
-    // Burst: gold explosion
     stroke(255,215,0, alphaVal);
   } else if (explosionType === "nova") {
     stroke(0,255,255, alphaVal);
