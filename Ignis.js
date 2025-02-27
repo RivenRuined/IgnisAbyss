@@ -3,36 +3,33 @@ console.log("Ignis.js loaded and running!!!");
 /*
   Ignis x Abyss – Life x Death
 
-  Final Build Features:
-  1) Movement:
-     - One "Movement" slider controls both keyboard & touch speed.
-     - Effective speed = slider value × health multiplier:
-       • 0–50% assimilation => Gold => 1.0
-       • 51–75% => Pink => 0.75
-       • 76–99% => Purple => 0.5
-       • ≥100% => Black => 0
-  2) Attacks:
-     - Burst (Space or "Burst" button): stronger repel (gold explosion).
-     - Auto Nova Pulse: every 3s, kills up to 5 tendrils in orbit.
-     - SuperNova: 10s meter => kills all in orbit (button or "V" key).
-  3) Assimilation:
-     - If ≥3 tendrils orbit, assimilation meter (abyssAccumulator) increases.
-     - Otherwise, it decays gradually.
-     - Health (and movement multiplier) is determined by fraction of ABSYSS_THRESHOLD.
-  4) Two toggles: "Random" & "Hard":
-     - Random => randomizes sliders each time Hunt meter fills.
-     - Hard => triggers extra hunts each time Hunt meter fills.
-  5) Walls toggle & screen-size presets remain.
+  Mobile Touch Logic:
+  • Left half of screen => drag => move Ignis.
+  • Right half => short tap => Burst, long hold => SuperNova (if charged).
+  Hard Mode => auto-Hunt every 5s.
+
+  Other Features:
+  • Single "Movement" slider for both keyboard & touch speed.
+  • Auto Nova Pulse every 3s (kills up to 5).
+  • SuperNova meter (10s) => user triggered if full (V key or button).
+  • Assimilation accumulates if ≥3 tendrils orbit, decays otherwise.
+  • Hard & Random toggles remain from previous code.
+
+  Key lines to see:
+  - The new multi-touch approach uses a hold threshold (400ms) on the right side for SuperNova.
+  - Hard Mode => triggers Hunt automatically every 5s.
 */
 
-// Timings & thresholds
-const AUTO_NOVA_THRESHOLD = 3000;   // 3s for Auto Nova Pulse
-const SUPERNOVA_THRESHOLD = 10000;  // 10s for SuperNova
+const AUTO_NOVA_THRESHOLD = 3000;    // 3s => Auto Nova Pulse
+const SUPERNOVA_THRESHOLD = 10000;   // 10s => SuperNova
 const ORBIT_DISTANCE = 50;
 const ABSYSS_THRESHOLD = 13000;
 const HUNT_THRESHOLD = 5000;
 const SPAWN_INTERVAL = 5000;
 const explosionDuration = 500;
+
+// We'll add a "Hard Mode" timer for auto-Hunt every 5s.
+const HARD_MODE_INTERVAL = 5000;
 
 // -------------------------------------------------------------------
 // 1) Classes
@@ -43,29 +40,28 @@ class Singularity {
     this.baseRadius = 15;
     this.radius = this.baseRadius;
     this.pulseSpeed = 0.05;
-    this.state = "healthy"; // "healthy","injured","dying","dead"
-    this.currentColor = color(255,215,0); // gold
+    this.state = "healthy"; // healthy/injured/dying/dead
+    this.currentColor = color(255,215,0);
     this.movementMultiplier = 1.0;
   }
 
   update() {
-    // Compute assimilation fraction
     let frac = abyssAccumulator / ABSYSS_THRESHOLD;
     if (frac <= 0.5) {
       this.state = "healthy";
-      this.currentColor = color(255,215,0); // gold
+      this.currentColor = color(255,215,0);
       this.movementMultiplier = 1.0;
     } else if (frac <= 0.75) {
       this.state = "injured";
-      this.currentColor = color(255,105,180); // pink
+      this.currentColor = color(255,105,180);
       this.movementMultiplier = 0.75;
     } else if (frac < 1) {
       this.state = "dying";
-      this.currentColor = color(128,0,128); // purple
+      this.currentColor = color(128,0,128);
       this.movementMultiplier = 0.5;
     } else {
       this.state = "dead";
-      this.currentColor = color(0,0,0); // black
+      this.currentColor = color(0,0,0);
       this.movementMultiplier = 0;
       if (deathBurstCount === 0) {
         explosionType = "death";
@@ -74,7 +70,6 @@ class Singularity {
         deathBurstTimer = 0;
       }
     }
-    // Pulsate if not dead
     if (this.state !== "dead") {
       this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
     }
@@ -94,15 +89,14 @@ class Singularity {
 
 class Tendril {
   constructor() {
-    // Spawn from a random edge
     let edge = floor(random(4));
     if (edge === 0) this.pos = createVector(random(width), 0);
     else if (edge === 1) this.pos = createVector(width, random(height));
     else if (edge === 2) this.pos = createVector(random(width), height);
     else this.pos = createVector(0, random(height));
 
-    this.vel = createVector(0, 0);
-    this.acc = createVector(0, 0);
+    this.vel = createVector(0,0);
+    this.acc = createVector(0,0);
     this.maxSpeed = 3;
     this.tail = [];
     this.tailMax = 20;
@@ -147,27 +141,28 @@ class Tendril {
     } else {
       let simSpeed = agroSlider.value();
       let d = p5.Vector.dist(this.pos, singularity.pos);
-      if (d > ORBIT_DISTANCE) {
+      if (d>ORBIT_DISTANCE) {
         let baseForce = p5.Vector.sub(singularity.pos, this.pos).setMag(0.05);
         this.acc.add(baseForce);
       }
-      if (this.boostTimer > 0) {
+      if (this.boostTimer>0) {
         let boostForce = p5.Vector.sub(singularity.pos, this.pos).setMag(0.2);
         this.acc.add(boostForce);
         this.boostTimer--;
       }
-      this.vel.add(this.acc).limit(this.maxSpeed * simSpeed);
+      this.vel.add(this.acc).limit(this.maxSpeed*simSpeed);
       this.pos.add(this.vel);
       this.acc.mult(0);
+
       if (wallsOn) {
-        if (this.pos.x < 0) { this.pos.x = 0; this.vel.x *= -1; }
-        if (this.pos.x > width) { this.pos.x = width; this.vel.x *= -1; }
-        if (this.pos.y < 0) { this.pos.y = 0; this.vel.y *= -1; }
-        if (this.pos.y > height) { this.pos.y = height; this.vel.y *= -1; }
+        if (this.pos.x<0)      { this.pos.x=0; this.vel.x*=-1; }
+        if (this.pos.x>width)  { this.pos.x=width; this.vel.x*=-1; }
+        if (this.pos.y<0)      { this.pos.y=0; this.vel.y*=-1; }
+        if (this.pos.y>height) { this.pos.y=height; this.vel.y*=-1; }
       }
     }
     this.tail.push(this.pos.copy());
-    if (this.tail.length > this.tailMax) this.tail.shift();
+    if (this.tail.length>this.tailMax) this.tail.shift();
   }
 
   show() {
@@ -185,15 +180,15 @@ class Tendril {
       drawColor = color(130,0,130);
     }
     fill(drawColor);
-    ellipse(this.pos.x, this.pos.y, 7, 7);
+    ellipse(this.pos.x, this.pos.y, 7,7);
     strokeWeight(1);
     noFill();
     beginShape();
-    for (let i=0; i<this.tail.length; i++){
+    for (let i=0;i<this.tail.length;i++){
       let pos = this.tail[i];
       let alpha = map(i,0,this.tail.length,0,255);
       stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
-      vertex(pos.x, pos.y);
+      vertex(pos.x,pos.y);
     }
     endShape();
   }
@@ -202,43 +197,55 @@ class Tendril {
 // -------------------------------------------------------------------
 // 2) Global Variables
 // -------------------------------------------------------------------
-let TENDRIL_COUNT = 20;
-let autoNovaTimer = 0;     // auto Nova (~3s)
-let superNovaTimer = 0;    // superNova (~10s)
-let huntTimer = 0;
-let abyssAccumulator = 0;
-let spawnTimer = 0;
-let explosionTimer = 0;
-let explosionType = "none";
-let deathBurstCount = 0;
-let deathBurstTimer = 0;
+let TENDRIL_COUNT=20;
+let autoNovaTimer=0;   // ~3s
+let superNovaTimer=0;  // ~10s
+let huntTimer=0;
+let abyssAccumulator=0;
+let spawnTimer=0;
+let explosionTimer=0;
+let explosionType="none";
+let deathBurstCount=0;
+let deathBurstTimer=0;
 
 let purpleColor, cyanColor, blackColor;
-let tendrils = [];
+let tendrils=[];
 let singularity;
-let simulationRunning = true;
+let simulationRunning=true;
 
 // Sliders
 let agroSlider, gravitySlider, movementSlider;
 
-// New toggles, declared once
-let randomMode = false;
-let hardMode = false;
+// Toggles
+let randomMode=false;
+let hardMode=false;
 
-let wallsOn = false, autoMode = true;
+// For Hard Mode auto-hunt
+let hardHuntTimer=0;
 
-// HUD references
+// For multi-touch logic
+const HOLD_THRESHOLD=400; // ms for hold => superNova
+let rightTouchStart=0; // time in ms
+let rightTouchID=-1;   // which touch is "right side"
+let rightHeld=false;
+let leftTouchID=-1;
+let leftTouchPrevX=0;
+let leftTouchPrevY=0;
+
+let wallsOn=false, autoMode=true;
+
+// HUD
 let controlPanel, huntMeter, abyssMeter, autoNovaMeter, superNovaMeter;
 
 // -------------------------------------------------------------------
 // 3) Setup & Draw
 // -------------------------------------------------------------------
 function setup() {
-  purpleColor = color(130,0,130);
-  cyanColor   = color(0,255,255);
-  blackColor  = color(0,0,0);
+  purpleColor=color(130,0,130);
+  cyanColor=color(0,255,255);
+  blackColor=color(0,0,0);
 
-  createCanvas(windowWidth, windowHeight);
+  createCanvas(windowWidth,windowHeight);
   createHUD_Bottom();
   resetSimulation();
 }
@@ -246,62 +253,63 @@ function setup() {
 function draw() {
   background(0);
 
-  // 1) Movement => slider × health multiplier
-  let effectiveSpeed = movementSlider.value() * singularity.movementMultiplier;
+  // 1) Movement => movementSlider × health multiplier
+  let effectiveSpeed = movementSlider.value()*singularity.movementMultiplier;
   handleKeyboard(effectiveSpeed);
 
-  // 2) Auto Nova Pulse
+  // 2) Hard Mode => auto-hunt every 5s
+  if (hardMode) {
+    hardHuntTimer += deltaTime;
+    if (hardHuntTimer>=5000) {
+      triggerHunt();
+      hardHuntTimer=0;
+    }
+  }
+
+  // 3) Auto Nova => ~3s
   autoNovaTimer += deltaTime;
-  if (autoNovaTimer >= AUTO_NOVA_THRESHOLD) {
+  if (autoNovaTimer>=AUTO_NOVA_THRESHOLD) {
     triggerAutoNovaPulse();
-    autoNovaTimer = 0;
+    autoNovaTimer=0;
   }
   autoNovaMeter.attribute("value", autoNovaTimer.toString());
 
-  // 3) SuperNova fill
-  if (superNovaTimer < SUPERNOVA_THRESHOLD) {
-    superNovaTimer += deltaTime;
-    if (superNovaTimer > SUPERNOVA_THRESHOLD) superNovaTimer = SUPERNOVA_THRESHOLD;
+  // 4) SuperNova => fill ~10s
+  if (superNovaTimer<SUPERNOVA_THRESHOLD) {
+    superNovaTimer+=deltaTime;
+    if (superNovaTimer>SUPERNOVA_THRESHOLD) superNovaTimer=SUPERNOVA_THRESHOLD;
   }
   superNovaMeter.attribute("value", superNovaTimer.toString());
 
-  // 4) Hunt Timer
-  huntTimer += deltaTime;
-  if (huntTimer >= HUNT_THRESHOLD) {
-    // Trigger normal hunt
+  // 5) Hunt Timer => 5s
+  huntTimer+=deltaTime;
+  if (huntTimer>=HUNT_THRESHOLD) {
     triggerHunt();
-    // If hardMode => trigger multiple hunts
-    if (hardMode) {
-      triggerHunt();
-      triggerHunt();
-    }
-    // If randomMode => randomize sliders
-    if (randomMode) {
-      randomizeSliders();
-    }
-    huntTimer = 0;
+    if (randomMode) randomizeSliders();
+    huntTimer=0;
   }
   huntMeter.attribute("value", huntTimer.toString());
 
-  // 5) Assimilation => if ≥3 orbit => accumulate, else decay
-  if (getOrbitCount() >= 3) {
-    abyssAccumulator += deltaTime;
+  // 6) Assimilation => if ≥3 orbit => accumulate, else decay
+  if (getOrbitCount()>=3) {
+    abyssAccumulator+=deltaTime;
   } else {
-    abyssAccumulator = max(0, abyssAccumulator - deltaTime*0.5);
+    abyssAccumulator=max(0, abyssAccumulator - deltaTime*0.5);
   }
-  if (abyssAccumulator >= ABSYSS_THRESHOLD) {
-    singularity.state = "dead";
-    explosionType = "death";
-    explosionTimer = explosionDuration;
-    deathBurstCount = 5;
-    deathBurstTimer = 0;
-    abyssAccumulator = ABSYSS_THRESHOLD; 
+  if (abyssAccumulator>=ABSYSS_THRESHOLD) {
+    singularity.state="dead";
+    explosionType="death";
+    explosionTimer=explosionDuration;
+    deathBurstCount=5;
+    deathBurstTimer=0;
+    abyssAccumulator=ABSYSS_THRESHOLD;
   }
   abyssMeter.attribute("value", abyssAccumulator.toString());
 
-  if (singularity.state === "dead" && deathBurstCount>0) {
-    deathBurstTimer += deltaTime;
-    if (deathBurstTimer >= 300) {
+  // Death effect if dead
+  if (singularity.state==="dead" && deathBurstCount>0) {
+    deathBurstTimer+=deltaTime;
+    if (deathBurstTimer>=300) {
       explosionType="death";
       explosionTimer=explosionDuration;
       deathBurstTimer=0;
@@ -309,14 +317,14 @@ function draw() {
     }
   }
 
-  // 6) Spawning
-  spawnTimer += deltaTime;
+  // 7) spawn
+  spawnTimer+=deltaTime;
   if (spawnTimer>SPAWN_INTERVAL) {
     spawnTendrils(10);
     spawnTimer=0;
   }
 
-  // 7) Update & show singularity & tendrils
+  // 8) Update & Show
   singularity.update();
   singularity.show();
   for (let t of tendrils) {
@@ -325,12 +333,12 @@ function draw() {
     t.update();
     t.show();
   }
-  tendrils = tendrils.filter(t=>!t.dead);
+  tendrils=tendrils.filter(t=>!t.dead);
 
-  // 8) Explosion effect
+  // 9) Explosion effect
   if (explosionTimer>0) {
     drawExplosion();
-    explosionTimer -= deltaTime;
+    explosionTimer-=deltaTime;
   }
 }
 
@@ -345,7 +353,7 @@ function windowResized() {
 // 4) HUD
 // -------------------------------------------------------------------
 function createHUD_Bottom() {
-  controlPanel = createDiv();
+  controlPanel=createDiv();
   controlPanel.style("position","absolute");
   controlPanel.style("bottom","0");
   controlPanel.style("left","0");
@@ -359,7 +367,7 @@ function createHUD_Bottom() {
   controlPanel.parent(document.body);
 
   // Row1: Attack Buttons
-  let row1 = createDiv();
+  let row1=createDiv();
   row1.parent(controlPanel);
   row1.style("display","flex");
   row1.style("justify-content","center");
@@ -367,20 +375,20 @@ function createHUD_Bottom() {
   row1.style("gap","10px");
   row1.style("margin-bottom","10px");
 
-  let spawnBtn = createButton("Spawn");
+  let spawnBtn=createButton("Spawn");
   spawnBtn.parent(row1);
   spawnBtn.mousePressed(()=>spawnTendrils(5));
 
-  let huntBtn = createButton("Hunt");
+  let huntBtn=createButton("Hunt");
   huntBtn.parent(row1);
   huntBtn.mousePressed(triggerHunt);
 
-  let burstBtn = createButton("Burst");
+  let burstBtn=createButton("Burst");
   burstBtn.parent(row1);
-  burstBtn.style("color","#FFD700"); 
+  burstBtn.style("color","#FFD700");
   burstBtn.mousePressed(triggerRepel);
 
-  let novaBtn = createButton("Nova");
+  let novaBtn=createButton("Nova");
   novaBtn.parent(row1);
   novaBtn.mousePressed(()=>{
     if (superNovaTimer>=SUPERNOVA_THRESHOLD) {
@@ -399,7 +407,7 @@ function createHUD_Bottom() {
   novaBtn.style("color","#00FFFF");
 
   // Row1.5: toggles for Random & Hard
-  let modeRow = createDiv();
+  let modeRow=createDiv();
   modeRow.parent(controlPanel);
   modeRow.style("display","flex");
   modeRow.style("justify-content","center");
@@ -407,18 +415,19 @@ function createHUD_Bottom() {
   modeRow.style("gap","10px");
   modeRow.style("margin-bottom","10px");
 
-  let randomBtn = createButton("Random: OFF");
+  let randomBtn=createButton("Random: OFF");
   randomBtn.parent(modeRow);
   randomBtn.mousePressed(()=>{
     randomMode=!randomMode;
     randomBtn.html("Random: "+(randomMode?"ON":"OFF"));
   });
 
-  let hardBtn = createButton("Hard: OFF");
+  let hardBtn=createButton("Hard: OFF");
   hardBtn.parent(modeRow);
   hardBtn.mousePressed(()=>{
     hardMode=!hardMode;
     hardBtn.html("Hard: "+(hardMode?"ON":"OFF"));
+    if(!hardMode) hardHuntTimer=0; // reset if turned off
   });
 
   // Row2: Sliders => Agro, Gravity, Movement
@@ -430,15 +439,15 @@ function createHUD_Bottom() {
   row2.style("gap","20px");
   row2.style("margin-bottom","5px");
 
-  agroSlider = createSlider(0,5,1.7,0.1);
+  agroSlider=createSlider(0,5,1.7,0.1);
   agroSlider.parent(row2);
   agroSlider.style("width","100px");
 
-  gravitySlider = createSlider(0,5,1.5,0.1);
+  gravitySlider=createSlider(0,5,1.5,0.1);
   gravitySlider.parent(row2);
   gravitySlider.style("width","100px");
 
-  movementSlider = createSlider(0,5,1.0,0.1);
+  movementSlider=createSlider(0,5,1.0,0.1);
   movementSlider.parent(row2);
   movementSlider.style("width","100px");
 
@@ -466,7 +475,7 @@ function createHUD_Bottom() {
   moveLabel.style("font-size","14px");
   moveLabel.style("color","#CCCCCC");
 
-  // Row4: Meters => AutoNova & SuperNova (cyan)
+  // Row4: Meters => AutoNova & SuperNova
   let row4=createDiv();
   row4.parent(controlPanel);
   row4.style("display","flex");
@@ -489,7 +498,7 @@ function createHUD_Bottom() {
   superNovaMeter.attribute("value","0");
   superNovaMeter.addClass("cyanMeter");
 
-  // Row5: Hunt & Abyss => desat purple
+  // Row5: Hunt & Abyss => desatpurple
   let row5=createDiv();
   row5.parent(controlPanel);
   row5.style("display","flex");
@@ -571,6 +580,7 @@ function resetSimulation() {
   huntTimer=0;
   autoNovaTimer=0;
   superNovaTimer=0;
+  hardHuntTimer=0; // reset
   tendrils=[];
   singularity=new Singularity(width/2,height/2);
   for (let i=0;i<TENDRIL_COUNT;i++){
@@ -583,7 +593,7 @@ function resetSimulation() {
 function spawnTendrils(n=1) {
   let available=50 - tendrils.length;
   let toSpawn=min(n,available);
-  for (let i=0; i<toSpawn; i++){
+  for (let i=0;i<toSpawn;i++){
     let t=new Tendril();
     t.autoHunt(singularity.pos);
     tendrils.push(t);
@@ -591,10 +601,10 @@ function spawnTendrils(n=1) {
 }
 
 function handleKeyboard(finalSpeed) {
-  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= finalSpeed;
-  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += finalSpeed;
-  if (keyIsDown(UP_ARROW) || keyIsDown(87))    singularity.pos.y -= finalSpeed;
-  if (keyIsDown(DOWN_ARROW) || keyIsDown(83))  singularity.pos.y += finalSpeed;
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x-=finalSpeed;
+  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x+=finalSpeed;
+  if (keyIsDown(UP_ARROW) || keyIsDown(87))    singularity.pos.y-=finalSpeed;
+  if (keyIsDown(DOWN_ARROW) || keyIsDown(83))  singularity.pos.y+=finalSpeed;
   singularity.pos.x=constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
   singularity.pos.y=constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
 }
@@ -604,7 +614,7 @@ function keyReleased() {
   if (keyCode===32) {
     triggerRepel();
   }
-  // V => SuperNova only if meter full
+  // V => SuperNova
   if (keyCode===86) {
     if (superNovaTimer>=SUPERNOVA_THRESHOLD) {
       triggerSuperNova();
@@ -620,7 +630,7 @@ function triggerHunt() {
 }
 
 function triggerRepel() {
-  // Stronger repulsion => multiplier 18
+  // stronger repulsion => 18
   for (let t of tendrils) {
     let d=p5.Vector.dist(t.pos, singularity.pos);
     if (d<ORBIT_DISTANCE && !t.immolating) {
@@ -672,33 +682,67 @@ function randomizeSliders() {
   movementSlider.value(random(0,5));
 }
 
-// Touch => simple drag
+// Touch logic: 
+// Left side => movement drag
+// Right side => if short tap => Burst, if hold≥400ms => SuperNova (if meter is full).
+let leftTouchActive=false;
+let rightTouchActive=false;
+let rightTouchStartTime=0;
+let rightTouchReleased=false;
+
 function touchStarted() {
   if (touches.length>0) {
     let t=touches[0];
-    touchStartX=t.x;
-    touchStartY=t.y;
+    if (t.x<width*0.5) {
+      // left side => movement
+      leftTouchActive=true;
+      leftTouchPrevX=t.x;
+      leftTouchPrevY=t.y;
+    } else {
+      // right side => store start time
+      rightTouchActive=true;
+      rightTouchStartTime=millis();
+    }
   }
 }
 
 function touchMoved() {
   if (touches.length>0) {
     let t=touches[0];
-    let dx=t.x - touchStartX;
-    let dy=t.y - touchStartY;
-    let factor=movementSlider.value()*singularity.movementMultiplier;
-    singularity.pos.x+=dx*factor;
-    singularity.pos.y+=dy*factor;
-    touchStartX=t.x;
-    touchStartY=t.y;
+    if (leftTouchActive && t.x<width*0.5) {
+      let dx=t.x-leftTouchPrevX;
+      let dy=t.y-leftTouchPrevY;
+      let factor=movementSlider.value()*singularity.movementMultiplier;
+      singularity.pos.x+=dx*factor;
+      singularity.pos.y+=dy*factor;
+      leftTouchPrevX=t.x;
+      leftTouchPrevY=t.y;
+    }
   }
   return false;
 }
 
 function touchEnded() {
-  // nothing needed
+  if (!simulationRunning) return;
+  if (rightTouchActive) {
+    let holdTime=millis()-rightTouchStartTime;
+    if (holdTime>=HOLD_THRESHOLD) {
+      // if meter is full => superNova
+      if (superNovaTimer>=SUPERNOVA_THRESHOLD) {
+        triggerSuperNova();
+        superNovaTimer=0;
+      }
+      // else do nothing
+    } else {
+      // short tap => burst
+      triggerRepel();
+    }
+  }
+  leftTouchActive=false;
+  rightTouchActive=false;
 }
 
+// Explosion
 function drawExplosion() {
   push();
   translate(singularity.pos.x, singularity.pos.y);
