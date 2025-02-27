@@ -14,6 +14,7 @@
       meter.cyanMeter::-moz-meter-bar {
          background: black;
       }
+
       /* Hunt and Assimilation meters: fill color desaturated purple, empty gauge black */
       meter.desatpurple::-webkit-meter-bar {
          background: black;
@@ -28,7 +29,7 @@
     <!-- p5 libraries -->
     <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/p5.dom@1.0.0/lib/p5.dom.js"></script>
-    <!-- Reference the JS file exactly as named -->
+    <!-- Must match exactly "Ignis.js" in same folder -->
     <script src="Ignis.js"></script>
   </head>
   <body style="margin:0; padding:0; background:#000;">
@@ -36,8 +37,9 @@
       Ignis x Abyss – Life x Death
     </h1>
     <p style="margin:0; padding:10px; color:white;">
-      This build auto-triggers Nova pulses (3 sec and 10 sec) with meters styled accordingly.<br/>
-      Controls: WSAD/Arrow keys and touchscreen movement are re‑enabled.
+      Final build: AutoNova pulses (3s) & SuperNova (10s), plus manual Burst & Nova triggers.<br/>
+      Controls: WSAD/Arrow keys, touchscreen, & D-Pad. 
+      Space => Burst, V => SuperNova. 
     </p>
   </body>
 </html>
