@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Ignis x Abyss – Life x Death</title>
     <style>
-      /* Nova/SuperNova meters: cyan fill on black */
+      /* AutoNova & SuperNova meters: cyan fill on black */
       meter.cyanMeter::-webkit-meter-bar {
          background: black;
       }
@@ -28,7 +28,7 @@
     <!-- p5 libraries -->
     <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/p5.dom@1.0.0/lib/p5.dom.js"></script>
-    <!-- Reference our JS file exactly as named -->
+    <!-- Must reference "Ignis.js" exactly -->
     <script src="Ignis.js"></script>
   </head>
   <body style="margin:0; padding:0; background:#000;">
@@ -36,8 +36,8 @@
       Ignis x Abyss – Life x Death
     </h1>
     <p style="margin:0; padding:10px; color:white;">
-      This build features three attacks: Burst (Space, gold effect), Auto Nova Pulse (every ~3s, killing up to 5 tendrils), and SuperNova (requires 10s fill; triggered by button or V key, kills all tendrils).<br/>
-      Movement is controlled by WASD/Arrow keys or touchscreen – by a single “Movement” slider that’s modified by health.
+      Attacks: Burst (Space, gold), Auto Nova Pulse (every ~3s, kills up to 5), and SuperNova (10s meter, V key or button kills all).<br/>
+      Movement is controlled by WASD/Arrow keys or touchscreen using the "Movement" slider, modified by health.
     </p>
   </body>
 </html>
