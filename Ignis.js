@@ -5,28 +5,28 @@ console.log("Ignis.js loaded and running!!!");
 
   Key Changes:
   • Hard Mode => the Hunt meter triggers every 0.3s, ensuring constant aggression.
-    (No more waves; it’s endless, unrelenting pressure.)
   • Pink assimilation effect is smaller (50% size), semi-transparent, & pulsing.
-  • White flash drawn over Singularity when Burst is triggered.
-  • Single Movement slider for keyboard & touch speed.
+  • White flash drawn over the Singularity when Burst is triggered.
+  • Single Movement slider for both keyboard & touch speed.
+  • No leftover or duplicate declarations for randomMode or hardMode.
 */
 
-const AUTO_NOVA_THRESHOLD = 3000;    // ~3s => Auto Nova kills up to 5
-const SUPERNOVA_THRESHOLD = 10000;   // ~10s => SuperNova kills all
+const AUTO_NOVA_THRESHOLD = 3000;     // ~3s => Auto Nova kills up to 5
+const SUPERNOVA_THRESHOLD = 10000;    // ~10s => SuperNova kills all
 const ORBIT_DISTANCE = 50;
 const ABSYSS_THRESHOLD = 13000;
 // Normal Mode: 5s for Hunt. Hard Mode: 0.3s
 const HUNT_THRESHOLD_NORMAL = 5000;
-const HUNT_THRESHOLD_HARD   = 300;   // 0.3s
+const HUNT_THRESHOLD_HARD   = 300;   // 0.3s for constant aggression
 
 const SPAWN_INTERVAL = 5000;
 const explosionDuration = 500;
-const HOLD_THRESHOLD = 400;  // ms for right-side long hold => SuperNova
+const HOLD_THRESHOLD = 400;          // ms for right-side long hold => SuperNova
 
 // Sliders & toggles
 let agroSlider, gravitySlider, movementSlider;
-let randomMode = false;
-let hardMode = false;
+let randomMode = false;  // Declared exactly once
+let hardMode   = false;  // Declared exactly once
 
 // assimilation & timers
 let abyssAccumulator = 0;
@@ -68,7 +68,7 @@ class Singularity {
     this.baseRadius = 15;
     this.radius = this.baseRadius;
     this.pulseSpeed = 0.05;
-    this.state = "healthy"; // healthy|injured|dying|dead
+    this.state = "healthy"; // healthy/injured/dying/dead
     this.currentColor = color(255,215,0);
     this.movementMultiplier = 1.0;
   }
@@ -189,25 +189,25 @@ class Tendril {
 
       if (wallsOn) {
         if (this.pos.x < 0) {
-          this.pos.x=0; 
-          this.vel.x*=-1;
+          this.pos.x = 0; 
+          this.vel.x *= -1;
         }
         if (this.pos.x > width) {
-          this.pos.x=width; 
-          this.vel.x*=-1;
+          this.pos.x = width; 
+          this.vel.x *= -1;
         }
         if (this.pos.y < 0) {
-          this.pos.y=0; 
-          this.vel.y*=-1;
+          this.pos.y = 0; 
+          this.vel.y *= -1;
         }
         if (this.pos.y > height) {
-          this.pos.y=height; 
-          this.vel.y*=-1;
+          this.pos.y = height; 
+          this.vel.y *= -1;
         }
       }
     }
     this.tail.push(this.pos.copy());
-    if (this.tail.length>this.tailMax) this.tail.shift();
+    if (this.tail.length > this.tailMax) this.tail.shift();
   }
 
   show() {
@@ -260,8 +260,8 @@ function draw() {
   handleKeyboard(effSpeed);
 
   // 2) Hunt logic:
-  // If Hard Mode => fill the Hunt meter every 0.3s => continuous aggression
-  let huntThreshold = hardMode ? 300 : HUNT_THRESHOLD_NORMAL; 
+  // If Hard Mode => fill the Hunt meter every 0.3s => constant aggression
+  let huntThreshold = hardMode ? HUNT_THRESHOLD_HARD : HUNT_THRESHOLD_NORMAL;
   huntTimer += deltaTime;
   if (huntTimer >= huntThreshold) {
     triggerHunt();
@@ -270,7 +270,7 @@ function draw() {
   }
   huntMeter.attribute("value", huntTimer.toString());
 
-  // 3) Auto Nova => ~3s => kill up to 5
+  // 3) Auto Nova => ~3s => kills up to 5
   autoNovaTimer += deltaTime;
   if (autoNovaTimer >= AUTO_NOVA_THRESHOLD) {
     triggerAutoNovaPulse();
@@ -289,7 +289,7 @@ function draw() {
   if (getOrbitCount() >= 3) {
     abyssAccumulator += deltaTime;
   } else {
-    abyssAccumulator = max(0, abyssAccumulator - deltaTime*0.5);
+    abyssAccumulator = max(0, abyssAccumulator - deltaTime * 0.5);
   }
   if (abyssAccumulator >= ABSYSS_THRESHOLD) {
     singularity.state = "dead";
@@ -299,7 +299,6 @@ function draw() {
     deathBurstTimer = 0;
     abyssAccumulator = ABSYSS_THRESHOLD;
   }
-  // update assimilation meter
   abyssMeter.attribute("value", abyssAccumulator.toString());
 
   if (singularity.state === "dead" && deathBurstCount > 0) {
@@ -342,9 +341,9 @@ function draw() {
   if (flashTimer > 0) {
     push();
     noFill();
-    stroke(255,255,255,150);
+    stroke(255, 255, 255, 150);
     strokeWeight(4);
-    ellipse(singularity.pos.x, singularity.pos.y, singularity.radius*2.2, singularity.radius*2.2);
+    ellipse(singularity.pos.x, singularity.pos.y, singularity.radius * 2.2, singularity.radius * 2.2);
     pop();
     flashTimer -= deltaTime;
   }
@@ -486,7 +485,7 @@ function createHUD_Bottom() {
   moveLabel.style("font-size","14px");
   moveLabel.style("color","#CCCCCC");
 
-  // Row4: AutoNova & SuperNova => both cyan
+  // Row4: Meters => AutoNova & SuperNova
   let row4 = createDiv();
   row4.parent(controlPanel);
   row4.style("display","flex");
@@ -521,6 +520,7 @@ function createHUD_Bottom() {
   huntMeter = createElement('meter');
   huntMeter.parent(row5);
   huntMeter.attribute("min","0");
+  // normal threshold is 5000, but in Hard Mode we do 300 ms behind the scenes
   huntMeter.attribute("max",HUNT_THRESHOLD_NORMAL.toString());
   huntMeter.attribute("value","0");
   huntMeter.addClass("desatpurple");
@@ -581,7 +581,7 @@ function createHUD_Bottom() {
 }
 
 // -------------------------------------------------------------------
-// 5) The rest of the logic
+// 4) The rest of the logic
 // -------------------------------------------------------------------
 function resetSimulation() {
   simulationRunning = true;
@@ -594,18 +594,18 @@ function resetSimulation() {
   flashTimer = 0;
   tendrils = [];
   singularity = new Singularity(width / 2, height / 2);
-  for (let i=0; i<TENDRIL_COUNT; i++){
-    let t=new Tendril();
+  for (let i = 0; i < TENDRIL_COUNT; i++){
+    let t = new Tendril();
     t.autoHunt(singularity.pos);
     tendrils.push(t);
   }
 }
 
-function spawnTendrils(n=1) {
+function spawnTendrils(n = 1) {
   let available = 50 - tendrils.length;
   let toSpawn = min(n, available);
-  for (let i=0; i<toSpawn; i++){
-    let t=new Tendril();
+  for (let i = 0; i < toSpawn; i++){
+    let t = new Tendril();
     t.autoHunt(singularity.pos);
     tendrils.push(t);
   }
@@ -613,25 +613,25 @@ function spawnTendrils(n=1) {
 
 // Movement: WASD/Arrows => finalSpeed
 function handleKeyboard(finalSpeed) {
-  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x-=finalSpeed;
-  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x+=finalSpeed;
-  if (keyIsDown(UP_ARROW) || keyIsDown(87))    singularity.pos.y-=finalSpeed;
-  if (keyIsDown(DOWN_ARROW) || keyIsDown(83))  singularity.pos.y+=finalSpeed;
-  singularity.pos.x=constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
-  singularity.pos.y=constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x -= finalSpeed;
+  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x += finalSpeed;
+  if (keyIsDown(UP_ARROW) || keyIsDown(87))    singularity.pos.y -= finalSpeed;
+  if (keyIsDown(DOWN_ARROW) || keyIsDown(83))  singularity.pos.y += finalSpeed;
+  singularity.pos.x = constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
+  singularity.pos.y = constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
 }
 
 function keyReleased() {
   // Space => Burst
-  if (keyCode===32) {
+  if (keyCode === 32) {
     triggerRepel();
-    flashTimer=200; // White flash
+    flashTimer = 200; // White flash
   }
   // V => SuperNova
-  if (keyCode===86) {
-    if (superNovaTimer>=SUPERNOVA_THRESHOLD) {
+  if (keyCode === 86) {
+    if (superNovaTimer >= SUPERNOVA_THRESHOLD) {
       triggerSuperNova();
-      superNovaTimer=0;
+      superNovaTimer = 0;
     }
   }
 }
@@ -644,5 +644,148 @@ function triggerHunt() {
 
 function triggerRepel() {
   for (let t of tendrils) {
-    let d=p5.Vector.dist(t.pos, singularity.pos);
-    if (d<ORBIT_DISTANCE
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d < ORBIT_DISTANCE && !t.immolating) {
+      let repulse = p5.Vector.sub(t.pos, singularity.pos).normalize().mult(18);
+      t.vel = repulse.copy();
+    }
+  }
+  explosionType = "burst";
+  explosionTimer = explosionDuration;
+}
+
+function triggerAutoNovaPulse() {
+  let count = 0;
+  for (let t of tendrils) {
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d < ORBIT_DISTANCE && !t.immolating) {
+      t.startImmolation();
+      count++;
+      if (count >= 5) break;
+    }
+  }
+  explosionType = "nova";
+  explosionTimer = explosionDuration;
+}
+
+function triggerSuperNova() {
+  for (let t of tendrils) {
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d < ORBIT_DISTANCE && !t.immolating) {
+      t.startImmolation();
+    }
+  }
+  explosionType = "supernova";
+  explosionTimer = explosionDuration * 1.5;
+}
+
+function getOrbitCount() {
+  let c = 0;
+  for (let t of tendrils) {
+    let d = p5.Vector.dist(t.pos, singularity.pos);
+    if (d < ORBIT_DISTANCE) c++;
+  }
+  return c;
+}
+
+function randomizeSliders() {
+  agroSlider.value(random(0, 5));
+  gravitySlider.value(random(0, 5));
+  movementSlider.value(random(0, 5));
+}
+
+// Basic multi-touch logic left side => movement, right side => short tap => burst, long => superNova
+function touchStarted() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    if (t.x < width * 0.5) {
+      leftTouchActive = true;
+      leftTouchPrevX = t.x;
+      leftTouchPrevY = t.y;
+    } else {
+      rightTouchActive = true;
+      rightTouchStartTime = millis();
+    }
+  }
+}
+
+function touchMoved() {
+  if (touches.length > 0) {
+    let t = touches[0];
+    if (leftTouchActive && t.x < width * 0.5) {
+      let dx = t.x - leftTouchPrevX;
+      let dy = t.y - leftTouchPrevY;
+      let factor = movementSlider.value() * singularity.movementMultiplier;
+      singularity.pos.x += dx * factor;
+      singularity.pos.y += dy * factor;
+      leftTouchPrevX = t.x;
+      leftTouchPrevY = t.y;
+    }
+  }
+  return false;
+}
+
+function touchEnded() {
+  if (rightTouchActive) {
+    let holdTime = millis() - rightTouchStartTime;
+    if (holdTime >= HOLD_THRESHOLD) {
+      // if meter is full => superNova
+      if (superNovaTimer >= SUPERNOVA_THRESHOLD) {
+        triggerSuperNova();
+        superNovaTimer = 0;
+      }
+    } else {
+      // short tap => burst
+      triggerRepel();
+      flashTimer = 200;
+    }
+  }
+  leftTouchActive = false;
+  rightTouchActive = false;
+}
+
+// Explosion effect
+function drawExplosion() {
+  push();
+  translate(singularity.pos.x, singularity.pos.y);
+  let steps = 5;
+  let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
+  let pulse = map(sin(frameCount * 0.1), -1, 1, 0.8, 1.2);
+
+  let len;
+  if (explosionType === "burst") {
+    stroke(255,215,0, alphaVal);
+    len = random(20,50);
+  } else if (explosionType === "nova") {
+    stroke(0,255,255, alphaVal);
+    len = random(20,50);
+  } else if (explosionType === "supernova") {
+    stroke(0,255,255, alphaVal);
+    len = random(40,90);
+  } else if (explosionType === "death") {
+    // Pink assimilation => half size, alpha*0.7, pulsing
+    stroke(255,0,255, alphaVal*0.7);
+    len = random(20,50)*0.5*pulse;
+  } else {
+    stroke(255,215,0, alphaVal);
+    len = random(20,50);
+  }
+  noFill();
+  for (let i = 0; i < 20; i++){
+    push();
+    rotate(random(TWO_PI));
+    beginShape();
+    vertex(0,0);
+    for (let j = 0; j < steps; j++){
+      let angle = random(-Math.PI/4, Math.PI/4);
+      let x = cos(angle)*len;
+      let y = sin(angle)*len;
+      vertex(x,y);
+    }
+    endShape();
+    pop();
+  }
+  pop();
+}
+
+// End of Ignis.js (Make sure you copied everything!)
