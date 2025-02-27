@@ -12,22 +12,15 @@ console.log("Ignis.js loaded and running!!!");
          • Dying (Purple, 76–99%): multiplier = 0.5
          • Dead (Black, ≥100%): multiplier = 0
   2) Attacks:
-     - Burst (Space key or Burst button): repel with a gold explosion.
+     - Burst (Space or Burst button): repel with gold explosion.
      - Nova Pulse: automatically triggers every ~3s, killing up to 5 tendrils in orbit.
-     - SuperNova: a meter fills over 10s; when full, user triggers it (button or V key) to kill all tendrils in orbit.
+     - SuperNova: meter fills over 10s; when full, user triggers it (button or V key) to kill all tendrils.
   3) Assimilation:
-     - When ≥3 tendrils are in orbit, the assimilation meter (abyssAccumulator) increases.
+     - If ≥3 tendrils orbit the Singularity, the assimilation meter increases continuously.
      - Otherwise, it decays gradually.
-     - This fraction (abyssAccumulator/ABSYSS_THRESHOLD) determines the Singularity’s health:
-         • 0–50% → Healthy (Gold, multiplier = 1.0)
-         • 51–75% → Injured (Pink, multiplier = 0.75)
-         • 76–99% → Dying (Purple, multiplier = 0.5)
-         • ≥100% → Dead (Black, multiplier = 0)
-  4) Respawn:
-     - When dead, the Singularity remains immobile for 5 seconds.
-     - After 5 seconds, it respawns in a brilliant gold burst (explosionType "respawn"), its assimilation meter resets to zero, and health returns to Gold.
-  5) HUD includes buttons for Spawn, Hunt, Burst (gold font), and Nova; sliders for Agro, Gravity, and Movement.
-  6) Walls toggle and screen presets remain.
+     - Health is computed from abyssAccumulator / ABSYSS_THRESHOLD.
+  4) HUD: Buttons for Spawn, Hunt, Burst, Nova; Sliders for Agro, Gravity, and Movement.
+  5) Walls toggle and screen presets remain.
 */
 
 // Thresholds/timings
@@ -38,7 +31,6 @@ const ABSYSS_THRESHOLD       = 13000;
 const HUNT_THRESHOLD         = 5000;
 const SPAWN_INTERVAL         = 5000;
 const explosionDuration      = 500;
-const RESPAWN_TIME           = 5000;   // 5 seconds until respawn
 
 // -------------------------------------------------------------------
 // 1) Classes
@@ -49,56 +41,37 @@ class Singularity {
     this.baseRadius = 15;
     this.radius = this.baseRadius;
     this.pulseSpeed = 0.05;
-    // Health state determined by assimilation fraction:
-    // "healthy", "injured", "dying", "dead"
-    this.state = "healthy";
+    // Health state based solely on assimilation fraction.
+    this.state = "healthy"; // "healthy", "injured", "dying", "dead"
     this.currentColor = color(255,215,0); // gold
     this.movementMultiplier = 1.0;
-    this.respawnTimer = 0;
   }
 
   update() {
-    // Compute assimilation fraction (from abyssAccumulator)
+    // Compute assimilation fraction
     let frac = abyssAccumulator / ABSYSS_THRESHOLD;
-    if (this.state !== "dead") { // if not already dead, update health based on fraction
-      if (frac <= 0.5) {
-        this.state = "healthy";
-        this.currentColor = color(255,215,0); // gold
-        this.movementMultiplier = 1.0;
-      } else if (frac <= 0.75) {
-        this.state = "injured";
-        this.currentColor = color(255,105,180); // pink
-        this.movementMultiplier = 0.75;
-      } else if (frac < 1) {
-        this.state = "dying";
-        this.currentColor = color(128,0,128); // purple
-        this.movementMultiplier = 0.5;
-      } else {
-        // When assimilation reaches or exceeds threshold, go dead.
-        this.state = "dead";
-        this.currentColor = color(0,0,0); // black
-        this.movementMultiplier = 0;
-        // Trigger death explosion if not already triggered.
-        if (this.respawnTimer === 0) {
-          explosionType = "death";
-          explosionTimer = explosionDuration;
-          deathBurstCount = 5;
-          deathBurstTimer = 0;
-        }
-      }
+    if (frac <= 0.5) {
+      this.state = "healthy";
+      this.currentColor = color(255,215,0); // gold
+      this.movementMultiplier = 1.0;
+    } else if (frac <= 0.75) {
+      this.state = "injured";
+      this.currentColor = color(255,105,180); // pink
+      this.movementMultiplier = 0.75;
+    } else if (frac < 1) {
+      this.state = "dying";
+      this.currentColor = color(128,0,128); // purple
+      this.movementMultiplier = 0.5;
     } else {
-      // If already dead, count respawn time.
-      this.respawnTimer += deltaTime;
-      if (this.respawnTimer >= RESPAWN_TIME) {
-        // Trigger respawn explosion effect (brilliant gold burst)
-        explosionType = "respawn";
+      this.state = "dead";
+      this.currentColor = color(0,0,0); // black
+      this.movementMultiplier = 0;
+      // Trigger repeated death explosion if not already active.
+      if (deathBurstCount === 0) {
+        explosionType = "death";
         explosionTimer = explosionDuration;
-        // Reset state to healthy.
-        this.state = "healthy";
-        this.currentColor = color(255,215,0);
-        this.movementMultiplier = 1.0;
-        this.respawnTimer = 0;
-        abyssAccumulator = 0;
+        deathBurstCount = 5;
+        deathBurstTimer = 0;
       }
     }
     // Pulsate only if not dead.
@@ -126,8 +99,9 @@ class Tendril {
     else if (edge === 1) this.pos = createVector(width, random(height));
     else if (edge === 2) this.pos = createVector(random(width), height);
     else this.pos = createVector(0, random(height));
-    this.vel = createVector(0,0);
-    this.acc = createVector(0,0);
+
+    this.vel = createVector(0, 0);
+    this.acc = createVector(0, 0);
     this.maxSpeed = 3;
     this.tail = [];
     this.tailMax = 20;
@@ -199,11 +173,11 @@ class Tendril {
     noStroke();
     let drawColor;
     if (this.immolating) {
-      if (this.immolateTimer < this.immolateDuration/2) {
-        let amt = this.immolateTimer / (this.immolateDuration/2);
+      if (this.immolateTimer < this.immolateDuration / 2) {
+        let amt = this.immolateTimer / (this.immolateDuration / 2);
         drawColor = lerpColor(purpleColor, cyanColor, amt);
       } else {
-        let amt = (this.immolateTimer - this.immolateDuration/2) / (this.immolateDuration/2);
+        let amt = (this.immolateTimer - this.immolateDuration / 2) / (this.immolateDuration / 2);
         drawColor = lerpColor(cyanColor, blackColor, amt);
       }
     } else {
@@ -228,8 +202,8 @@ class Tendril {
 // 2) Global Variables
 // -------------------------------------------------------------------
 let TENDRIL_COUNT = 20;
-let autoNovaTimer = 0;    // Auto Nova pulse timer (~3s)
-let superNovaTimer = 0;   // SuperNova meter timer (~10s)
+let autoNovaTimer = 0;    // Auto Nova timer (~3s)
+let superNovaTimer = 0;   // SuperNova timer (~10s)
 let huntTimer = 0;
 let abyssAccumulator = 0;
 let spawnTimer = 0;
@@ -256,9 +230,9 @@ let controlPanel, huntMeter, abyssMeter, autoNovaMeter, superNovaMeter;
 // -------------------------------------------------------------------
 function setup() {
   purpleColor = color(130, 0, 130);
-  cyanColor   = color(0, 255, 255);
-  blackColor  = color(0, 0, 0);
-  
+  cyanColor = color(0, 255, 255);
+  blackColor = color(0, 0, 0);
+
   createCanvas(windowWidth, windowHeight);
   createHUD_Bottom();
   resetSimulation();
@@ -267,7 +241,7 @@ function setup() {
 function draw() {
   background(0);
 
-  // 1) Movement: effective speed = movementSlider value × health multiplier.
+  // 1) Movement: effective speed = movementSlider × health multiplier.
   let effectiveSpeed = movementSlider.value() * singularity.movementMultiplier;
   handleKeyboard(effectiveSpeed);
 
@@ -279,7 +253,7 @@ function draw() {
   }
   autoNovaMeter.attribute("value", autoNovaTimer.toString());
 
-  // 3) SuperNova: fills over 10s and remains full until triggered.
+  // 3) SuperNova: fills over 10s; remains full until triggered.
   if (superNovaTimer < SUPERNOVA_THRESHOLD) {
     superNovaTimer += deltaTime;
     if (superNovaTimer > SUPERNOVA_THRESHOLD) superNovaTimer = SUPERNOVA_THRESHOLD;
@@ -294,20 +268,20 @@ function draw() {
   }
   huntMeter.attribute("value", huntTimer.toString());
 
-  // 5) Assimilation: Increase if ≥3 tendrils in orbit; otherwise, decay gradually.
+  // 5) Assimilation: Increase if ≥3 tendrils in orbit; otherwise decay.
   if (getOrbitCount() >= 3) {
     abyssAccumulator += deltaTime;
   } else {
     abyssAccumulator = max(0, abyssAccumulator - deltaTime * 0.5);
   }
-  // When assimilation reaches threshold, Singularity goes dead.
+  // When assimilation reaches threshold, singularity "dies".
   if (abyssAccumulator >= ABSYSS_THRESHOLD) {
     singularity.state = "dead";
     explosionType = "death";
     explosionTimer = explosionDuration;
     deathBurstCount = 5;
     deathBurstTimer = 0;
-    abyssAccumulator = ABSYSS_THRESHOLD; // Remains full
+    abyssAccumulator = ABSYSS_THRESHOLD; // Remain full
   }
   abyssMeter.attribute("value", abyssAccumulator.toString());
 
@@ -356,7 +330,7 @@ function windowResized() {
 }
 
 // -------------------------------------------------------------------
-// 4) HUD – Updated: Remove D-Pad; only Agro, Gravity, and Movement sliders.
+// 4) HUD – Updated: D-Pad removed; 3 sliders: Agro, Gravity, Movement.
 // -------------------------------------------------------------------
 function createHUD_Bottom() {
   controlPanel = createDiv();
@@ -391,12 +365,11 @@ function createHUD_Bottom() {
 
   let burstBtn = createButton("Burst");
   burstBtn.parent(row1);
-  burstBtn.style("color", "#FFD700"); // Gold font for Burst
+  burstBtn.style("color", "#FFD700"); // Gold for Burst
   burstBtn.mousePressed(triggerRepel);
 
   let novaBtn = createButton("Nova");
   novaBtn.parent(row1);
-  // Only trigger SuperNova if meter is full.
   novaBtn.mousePressed(() => {
     if (superNovaTimer >= SUPERNOVA_THRESHOLD) {
       triggerSuperNova();
@@ -434,7 +407,7 @@ function createHUD_Bottom() {
   movementSlider.parent(row2);
   movementSlider.style("width", "100px");
 
-  // Row3: Labels for Sliders
+  // Row3: Labels
   let row3 = createDiv();
   row3.parent(controlPanel);
   row3.style("display", "flex");
@@ -481,7 +454,7 @@ function createHUD_Bottom() {
   superNovaMeter.attribute("value", "0");
   superNovaMeter.addClass("cyanMeter");
 
-  // Row5: Hunt & Abyss meters (desat purple)
+  // Row5: Hunt & Abyss (desat purple)
   let row5 = createDiv();
   row5.parent(controlPanel);
   row5.style("display", "flex");
@@ -692,21 +665,17 @@ function drawExplosion() {
   translate(singularity.pos.x, singularity.pos.y);
   let steps = 5;
   let alphaVal = map(explosionTimer, 0, explosionDuration, 0, 255);
-  
   if (explosionType === "burst") {
-    stroke(255,215,0, alphaVal); // Gold
+    stroke(255,215,0, alphaVal);
   } else if (explosionType === "nova") {
-    stroke(0,255,255, alphaVal); // Cyan for Auto Nova
+    stroke(0,255,255, alphaVal);
   } else if (explosionType === "supernova") {
-    stroke(0,255,255, alphaVal); // Cyan for SuperNova
+    stroke(0,255,255, alphaVal);
   } else if (explosionType === "death") {
-    stroke(255,0,255, alphaVal); // Pink for death
-  } else if (explosionType === "respawn") {
-    stroke(255,215,0, alphaVal); // Gold burst for respawn
+    stroke(255,0,255, alphaVal);
   } else {
     stroke(255,215,0, alphaVal);
   }
-  
   noFill();
   for (let i = 0; i < 20; i++) {
     push();
