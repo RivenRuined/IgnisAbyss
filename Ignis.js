@@ -229,9 +229,9 @@ class Tendril {
     strokeWeight(1);
     noFill();
     beginShape();
-    for (let i=0; i<this.tail.length; i++){
+    for (let i = 0; i < this.tail.length; i++){
       let pos = this.tail[i];
-      let alpha = map(i,0,this.tail.length,0,255);
+      let alpha = map(i, 0, this.tail.length, 0, 255);
       stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
       vertex(pos.x, pos.y);
     }
