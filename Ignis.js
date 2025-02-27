@@ -3,13 +3,17 @@ console.log("Ignis.js loaded and running!!!");
 /*
   Ignis x Abyss – Life x Death
 
-  New: Ricochet Effect in "On" & "Dynamic" modes.
-  • Instead of pushing inward, collisions with walls cause a bounce (equal-and-opposite angle).
-  • Velocity is reduced slightly to avoid infinite speed.
-  • In Dynamic mode, smaller radius => stronger ricochet force => more chaotic.
-  • Hard Mode => Hunt every 0.3s.
-  • Pink assimilation => half size, pulsing. White flash on Burst.
-  • No duplicates of randomMode/hardMode/dynamicRadiusBase, etc.
+  Changes:
+  • Dynamic circle boundary now truly traps the Singularity & Tendrils inside:
+    - If they cross the boundary, they’re pushed inward unconditionally.
+    - Then, if they were heading outward (dot>0), they ricochet/bounce.
+  • Movement slider defaults to 5.0 (max) so you don’t have to raise it each time.
+
+  Other features:
+  • Hard Mode => Hunt triggers every 0.3s.
+  • Pink assimilation => half size, pulsing, semi-transparent.
+  • White flash on Burst.
+  • No leftover duplicates of randomMode/hardMode/dynamicRadiusBase.
 */
 
 // Basic constants
@@ -50,7 +54,7 @@ let deathBurstTimer  = 0;
 // toggles
 let wallsOn   = false;
 let autoMode  = true;
-let wallMode  = "Off"; // "Off","On","Dynamic"
+let wallMode  = "Off";  // "Off","On","Dynamic"
 
 // White flash on Burst
 let flashTimer = 0;
@@ -86,7 +90,7 @@ class Singularity {
     this.state             = "healthy"; // healthy/injured/dying/dead
     this.currentColor      = color(255,215,0);
     this.movementMultiplier= 1.0;
-    this.vel               = createVector(0,0); // For bounce
+    this.vel               = createVector(0,0); // for ricochet
   }
 
   update() {
@@ -270,7 +274,7 @@ function draw() {
   }
   huntMeter.attribute("value",huntTimer.toString());
 
-  // Auto Nova => ~3s => kill up to 5
+  // Auto Nova => ~3s => kills up to 5
   autoNovaTimer+=deltaTime;
   if (autoNovaTimer>=AUTO_NOVA_THRESHOLD) {
     triggerAutoNovaPulse();
@@ -289,7 +293,7 @@ function draw() {
   if (getOrbitCount()>=3) {
     abyssAccumulator+=deltaTime;
   } else {
-    abyssAccumulator=max(0, abyssAccumulator - deltaTime*0.5);
+    abyssAccumulator=max(0,abyssAccumulator - deltaTime*0.5);
   }
   if (abyssAccumulator>=ABSYSS_THRESHOLD) {
     singularity.state="dead";
@@ -320,7 +324,7 @@ function draw() {
 
   // dynamic boundary
   if (wallMode==="Dynamic") updateDynamicWall();
-  handleWalls(); // now does ricochet for On or Dynamic
+  handleWalls();
 
   // update & show singularity & tendrils
   singularity.update();
@@ -452,7 +456,8 @@ function createHUD_Bottom() {
   gravitySlider.parent(row2);
   gravitySlider.style("width","100px");
 
-  movementSlider=createSlider(0,5,1.0,0.1);
+  // Movement slider => default at 5.0
+  movementSlider=createSlider(0,5,5,0.1);
   movementSlider.parent(row2);
   movementSlider.style("width","100px");
 
@@ -803,10 +808,9 @@ function handleWalls() {
 // Bounce Logic
 //-----------------------------------------------
 function handleBoxBounce(entity) {
-  // entity has pos & vel => if outside => bounce
-  // We'll reduce velocity slightly
-  let damping=0.9; // velocity scale after bounce
+  // We'll store velocity in entity.vel
   if (!entity.vel) entity.vel=createVector(0,0);
+  let damping=0.9; // reduce speed on bounce
 
   if (entity.pos.x<0) {
     entity.pos.x=0;
@@ -832,28 +836,30 @@ function handleBoxBounce(entity) {
 
 function handleCircleBounce(entity) {
   // center => (width/2, height/2), radius=dynamicRadius
-  // if outside => bounce
   if (!entity.vel) entity.vel=createVector(0,0);
 
   let center=createVector(width*0.5,height*0.5);
   let d=p5.Vector.dist(entity.pos,center);
-  let boundary=dynamicRadius - (entity.baseRadius||7); // singularity has baseRadius=15, tendril ~7
+
+  // entity radius => for Singularity baseRadius=15, for Tendrils ~7
+  let r=(entity.baseRadius||7);
+  let boundary=dynamicRadius - r;
+
   if (d>boundary) {
-    // bounce
+    // 1) Always push inside so it can't escape
     let normal=p5.Vector.sub(entity.pos,center).normalize();
+    let overlap = d - boundary;
+    entity.pos.sub(p5.Vector.mult(normal, overlap));
+
+    // 2) Check if heading outward => bounce
     let approach=entity.vel.dot(normal);
-    // if approach>0 => heading outward => bounce
-    // reflection => v'=v-2(v⋅n)n
-    // We'll also scale velocity slightly & scale more if radius is smaller => more chaotic
-    let radiusFrac=dynamicRadius/dynamicRadiusBase; // 1 => large, 0.3 => small
-    let bounceScale=map(radiusFrac,0.3,1,1.2,0.8,true); // smaller radius => bigger bounce
     if (approach>0) {
+      // reflection => v'=v-2(v⋅n)n
+      let radiusFrac=dynamicRadius/dynamicRadiusBase; 
+      let bounceScale=map(radiusFrac,0.3,1,1.2,0.8,true); 
       let reflect= p5.Vector.sub(entity.vel, p5.Vector.mult(normal,2*approach));
-      reflect.mult(0.9*bounceScale); // reduce speed slightly
+      reflect.mult(0.9*bounceScale); 
       entity.vel=reflect;
-      // push entity inside boundary
-      let overlap=d-boundary;
-      entity.pos.sub(normal.mult(overlap));
     }
   }
 }
@@ -864,7 +870,7 @@ function drawExplosion() {
   translate(singularity.pos.x, singularity.pos.y);
   let steps=5;
   let alphaVal=map(explosionTimer,0,explosionDuration,0,255);
-  let pulse=map(sin(frameCount*0.1),-1,1,0.8,1.2);
+  let pulse=map(sin(frameCount * 0.1),-1,1,0.8,1.2);
 
   let len;
   if (explosionType==="burst") {
