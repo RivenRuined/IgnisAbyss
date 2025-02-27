@@ -3,37 +3,35 @@ console.log("Ignis.js loaded and running!!!");
 /*
   Ignis x Abyss – Life x Death
 
-  Key Additions:
-  • Three Wall Modes:
+  Features:
+  • Three Wall Modes: Off, On, Dynamic (“Heart of the Abyss”).
     - Off => no walls
-    - On => static bounding box
-    - Dynamic => “Heart of the Abyss” pulsing circle that shrinks from 100% radius to 30%, then expands back to 100%, endlessly.
-      If the Singularity or Tendrils cross that circle boundary, they're pushed inward.
+    - On => standard bounding box
+    - Dynamic => a pulsing circular boundary that shrinks from 100% radius to 30%, then expands back, repeatedly.
+      If Singularity or Tendrils cross it, they’re pushed inward.
 
-  • Hard Mode => Hunt triggers every 0.3s (continuous aggression).
-  • Pink assimilation effect => smaller, pulsing, semi-transparent.
-  • White flash on Burst.
-  • Single Movement slider for both keyboard & touch speed.
-  • No leftover duplicates of randomMode/hardMode.
+  • Hard Mode => Hunt triggers every 0.3s (constant aggression).
+  • Pink assimilation effect => smaller & pulsing, semi-transparent.
+  • White flash drawn over Singularity when Burst is triggered.
+  • Single Movement slider for keyboard & touch.
+  • No leftover or duplicate declarations for randomMode/hardMode/dynamicRadiusBase/etc.
 */
 
-const AUTO_NOVA_THRESHOLD = 3000;    // ~3s => Auto Nova kills up to 5
-const SUPERNOVA_THRESHOLD = 10000;   // ~10s => SuperNova kills all
-const ORBIT_DISTANCE = 50;
-const ABSYSS_THRESHOLD = 13000;
+// Basic constants
+const AUTO_NOVA_THRESHOLD    = 3000;   // ~3s => Auto Nova kills up to 5
+const SUPERNOVA_THRESHOLD    = 10000;  // ~10s => SuperNova kills all
+const ORBIT_DISTANCE         = 50;
+const ABSYSS_THRESHOLD       = 13000;
+const HUNT_THRESHOLD_NORMAL  = 5000;   // normal 5s
+const HUNT_THRESHOLD_HARD    = 300;    // 0.3s for Hard Mode
+const SPAWN_INTERVAL         = 5000;
+const explosionDuration      = 500;
+const HOLD_THRESHOLD         = 400;    // ms for long hold => SuperNova
 
-// Normal vs Hard hunt intervals
-const HUNT_THRESHOLD_NORMAL = 5000;
-const HUNT_THRESHOLD_HARD   = 300;   // 0.3s
-
-const SPAWN_INTERVAL = 5000;
-const explosionDuration = 500;
-const HOLD_THRESHOLD = 400;          // ms for right-side long hold => SuperNova
-
-// Dynamic circle boundary config
-const DYNAMIC_CYCLE_TIME = 10000;    // 10s from 100% radius down to 30% or vice versa
-const DYNAMIC_MIN_FRAC   = 0.3;      // 30% radius
-const DYNAMIC_MAX_FRAC   = 1.0;      // 100% radius
+// Dynamic boundary config
+const DYNAMIC_CYCLE_TIME     = 10000;  // 10s for each shrink or expand phase
+const DYNAMIC_MIN_FRAC       = 0.3;    // 30% radius
+const DYNAMIC_MAX_FRAC       = 1.0;    // 100% radius
 
 // Sliders & toggles
 let agroSlider, gravitySlider, movementSlider;
@@ -42,120 +40,126 @@ let hardMode   = false;
 
 // assimilation & timers
 let abyssAccumulator = 0;
-let autoNovaTimer = 0;
-let superNovaTimer = 0;
-let huntTimer = 0;
-let spawnTimer = 0;
+let autoNovaTimer    = 0;
+let superNovaTimer   = 0;
+let huntTimer        = 0;
+let spawnTimer       = 0;
 
 // explosion
-let explosionTimer = 0;
-let explosionType = "none";
-let deathBurstCount = 0;
-let deathBurstTimer = 0;
+let explosionTimer   = 0;
+let explosionType    = "none";
+let deathBurstCount  = 0;
+let deathBurstTimer  = 0;
 
 // toggles
-let wallsOn = false, autoMode = true;
-let wallMode = "Off";  // "Off", "On", "Dynamic"
+let wallsOn   = false;
+let autoMode  = true;
+let wallMode  = "Off";  // "Off", "On", "Dynamic"
 
-// White flash after Burst
+// White flash on Burst
 let flashTimer = 0;
 
-// For multi-touch logic
-let leftTouchActive = false;
-let leftTouchPrevX=0, leftTouchPrevY=0;
-let rightTouchActive=false;
-let rightTouchStartTime=0;
+// Multi-touch logic
+let leftTouchActive  = false;
+let leftTouchPrevX   = 0;
+let leftTouchPrevY   = 0;
+let rightTouchActive = false;
+let rightTouchStartTime = 0;
 
 let purpleColor, cyanColor, blackColor;
 let singularity;
-let tendrils=[];
-let simulationRunning=true;
-const TENDRIL_COUNT=20;
+let tendrils = [];
+let simulationRunning = true;
+const TENDRIL_COUNT = 20;
 
 // For dynamic circle boundary
-let dynamicRadiusBase=0;      // e.g. half the smaller dimension
-let dynamicRadius=0;          // current radius
-let dynamicState="shrinking"; // "shrinking" or "expanding"
-let dynamicTimer=0;           // tracks 0..DYNAMIC_CYCLE_TIME
+let dynamicRadiusBase = 0;    // half the smaller dimension
+let dynamicRadius     = 0;    // current radius
+let dynamicState      = "shrinking"; // "shrinking"|"expanding"
+let dynamicTimer      = 0;    // 0..DYNAMIC_CYCLE_TIME
 
-// -------------------------------------------------------------------
+//--------------------------------------------------------------------
 // 1) Classes
-// -------------------------------------------------------------------
+//--------------------------------------------------------------------
 class Singularity {
-  constructor(x,y) {
-    this.pos = createVector(x,y);
-    this.baseRadius=15;
-    this.radius=this.baseRadius;
-    this.pulseSpeed=0.05;
-    this.state="healthy"; // healthy/injured/dying/dead
-    this.currentColor=color(255,215,0);
-    this.movementMultiplier=1.0;
+  constructor(x, y) {
+    this.pos               = createVector(x, y);
+    this.baseRadius        = 15;
+    this.radius            = this.baseRadius;
+    this.pulseSpeed        = 0.05;
+    this.state             = "healthy"; // healthy/injured/dying/dead
+    this.currentColor      = color(255,215,0);
+    this.movementMultiplier= 1.0;
   }
 
   update() {
-    let frac=abyssAccumulator/ABSYSS_THRESHOLD;
-    if (frac<=0.5) {
-      this.state="healthy";
-      this.currentColor=color(255,215,0);
-      this.movementMultiplier=1.0;
-    } else if (frac<=0.75) {
-      this.state="injured";
-      this.currentColor=color(255,105,180);
-      this.movementMultiplier=0.75;
-    } else if (frac<1) {
-      this.state="dying";
-      this.currentColor=color(128,0,128);
-      this.movementMultiplier=0.5;
+    let frac = abyssAccumulator / ABSYSS_THRESHOLD;
+    if (frac <= 0.5) {
+      this.state          = "healthy";
+      this.currentColor   = color(255,215,0);
+      this.movementMultiplier = 1.0;
+    } else if (frac <= 0.75) {
+      this.state          = "injured";
+      this.currentColor   = color(255,105,180);
+      this.movementMultiplier = 0.75;
+    } else if (frac < 1) {
+      this.state          = "dying";
+      this.currentColor   = color(128,0,128);
+      this.movementMultiplier = 0.5;
     } else {
-      this.state="dead";
-      this.currentColor=color(0,0,0);
-      this.movementMultiplier=0;
-      if (deathBurstCount===0) {
-        explosionType="death";
-        explosionTimer=explosionDuration;
-        deathBurstCount=5;
-        deathBurstTimer=0;
+      this.state          = "dead";
+      this.currentColor   = color(0,0,0);
+      this.movementMultiplier = 0;
+      if (deathBurstCount === 0) {
+        explosionType     = "death";
+        explosionTimer    = explosionDuration;
+        deathBurstCount   = 5;
+        deathBurstTimer   = 0;
       }
     }
-    if (this.state!=="dead") {
-      this.radius=this.baseRadius + sin(frameCount*this.pulseSpeed)*5;
+    if (this.state !== "dead") {
+      this.radius = this.baseRadius + sin(frameCount * this.pulseSpeed) * 5;
     }
   }
 
   show() {
     noStroke();
-    if (this.state==="dead") {
+    if (this.state === "dead") {
       stroke(255,0,255);
       strokeWeight(2);
     }
     fill(this.currentColor);
-    ellipse(this.pos.x,this.pos.y,this.radius*2,this.radius*2);
+    ellipse(this.pos.x, this.pos.y, this.radius*2, this.radius*2);
     noStroke();
   }
 }
 
 class Tendril {
   constructor() {
-    let edge=floor(random(4));
-    if (edge===0) this.pos=createVector(random(width),0);
-    else if (edge===1) this.pos=createVector(width,random(height));
-    else if (edge===2) this.pos=createVector(random(width),height);
-    else this.pos=createVector(0,random(height));
-
-    this.vel=createVector(0,0);
-    this.acc=createVector(0,0);
-    this.maxSpeed=3;
-    this.tail=[];
-    this.tailMax=20;
-    this.boostTimer=0;
-    this.immolating=false;
-    this.immolateTimer=0;
-    this.immolateDuration=2000;
-    this.dead=false;
+    let edge = floor(random(4));
+    if (edge===0) {
+      this.pos = createVector(random(width),0);
+    } else if (edge===1) {
+      this.pos = createVector(width, random(height));
+    } else if (edge===2) {
+      this.pos = createVector(random(width), height);
+    } else {
+      this.pos = createVector(0, random(height));
+    }
+    this.vel           = createVector(0,0);
+    this.acc           = createVector(0,0);
+    this.maxSpeed      = 3;
+    this.tail          = [];
+    this.tailMax       = 20;
+    this.boostTimer    = 0;
+    this.immolating    = false;
+    this.immolateTimer = 0;
+    this.immolateDuration = 2000;
+    this.dead          = false;
   }
 
   autoHunt(targetPos) {
-    let force=p5.Vector.sub(targetPos,this.pos);
+    let force = p5.Vector.sub(targetPos, this.pos);
     force.setMag(random(1,2));
     this.vel=force;
   }
@@ -164,45 +168,42 @@ class Tendril {
     this.boostTimer=30;
   }
 
-  orbit(targetPos,pullStrength) {
-    let desired=p5.Vector.sub(targetPos,this.pos);
-    let tangent=createVector(-desired.y, desired.x).normalize().mult(pullStrength);
+  orbit(targetPos, pullStrength) {
+    let desired = p5.Vector.sub(targetPos, this.pos);
+    let tangent = createVector(-desired.y, desired.x).normalize().mult(pullStrength);
     desired.normalize().mult(pullStrength);
-    this.acc.add(p5.Vector.add(desired,tangent));
+    this.acc.add(p5.Vector.add(desired, tangent));
   }
 
   startImmolation() {
     if (!this.immolating) {
-      this.immolating=true;
-      this.immolateTimer=0;
+      this.immolating   = true;
+      this.immolateTimer= 0;
     }
   }
 
   update() {
     if (!simulationRunning) return;
     if (this.immolating) {
-      this.immolateTimer+=deltaTime;
+      this.immolateTimer += deltaTime;
       if (this.immolateTimer>this.immolateDuration) {
         this.dead=true;
       }
     } else {
-      let simSpeed=agroSlider.value();
-      let d=p5.Vector.dist(this.pos,singularity.pos);
+      let simSpeed = agroSlider.value();
+      let d = p5.Vector.dist(this.pos, singularity.pos);
       if (d>ORBIT_DISTANCE) {
-        let baseForce=p5.Vector.sub(singularity.pos,this.pos).setMag(0.05);
+        let baseForce = p5.Vector.sub(singularity.pos, this.pos).setMag(0.05);
         this.acc.add(baseForce);
       }
       if (this.boostTimer>0) {
-        let boostForce=p5.Vector.sub(singularity.pos,this.pos).setMag(0.2);
+        let boostForce = p5.Vector.sub(singularity.pos, this.pos).setMag(0.2);
         this.acc.add(boostForce);
         this.boostTimer--;
       }
       this.vel.add(this.acc).limit(this.maxSpeed*simSpeed);
       this.pos.add(this.vel);
       this.acc.mult(0);
-
-      // If wallsOn => bounding box. If dynamic => circle boundary.
-      // We'll handle that after movement.
     }
     // tail
     this.tail.push(this.pos.copy());
@@ -215,23 +216,23 @@ class Tendril {
     if (this.immolating) {
       if (this.immolateTimer<this.immolateDuration/2) {
         let amt=this.immolateTimer/(this.immolateDuration/2);
-        drawColor=lerpColor(purpleColor,cyanColor,amt);
+        drawColor=lerpColor(purpleColor, cyanColor, amt);
       } else {
         let amt=(this.immolateTimer - this.immolateDuration/2)/(this.immolateDuration/2);
-        drawColor=lerpColor(cyanColor,blackColor,amt);
+        drawColor=lerpColor(cyanColor, blackColor, amt);
       }
     } else {
-      drawColor=color(130,0,130);
+      drawColor = color(130,0,130);
     }
     fill(drawColor);
-    ellipse(this.pos.x,this.pos.y,7,7);
+    ellipse(this.pos.x, this.pos.y, 7,7);
     strokeWeight(1);
     noFill();
     beginShape();
     for (let i=0;i<this.tail.length;i++){
       let pos=this.tail[i];
       let alpha=map(i,0,this.tail.length,0,255);
-      stroke(red(drawColor),green(drawColor),blue(drawColor),alpha);
+      stroke(red(drawColor), green(drawColor), blue(drawColor), alpha);
       vertex(pos.x,pos.y);
     }
     endShape();
@@ -242,58 +243,60 @@ class Tendril {
 // 2) Setup & Draw
 // -------------------------------------------------------------------
 function setup() {
-  purpleColor=color(130,0,130);
-  cyanColor=color(0,255,255);
-  blackColor=color(0,0,0);
+  purpleColor = color(130,0,130);
+  cyanColor   = color(0,255,255);
+  blackColor  = color(0,0,0);
 
-  createCanvas(windowWidth,windowHeight);
+  createCanvas(windowWidth, windowHeight);
   createHUD_Bottom();
   resetSimulation();
 
-  // For dynamic mode: set base radius = half the smaller dimension
+  // For dynamic boundary => half smaller dimension
   dynamicRadiusBase = min(width,height)*0.5;
-  dynamicRadius     = dynamicRadiusBase; // start at 100%
+  dynamicRadius     = dynamicRadiusBase; // start at full size
+  dynamicState      = "shrinking";       // first cycle
+  dynamicTimer      = 0;
 }
 
 function draw() {
   background(0);
 
-  // 1) Movement => movementSlider × health multiplier
-  let effSpeed=movementSlider.value()*singularity.movementMultiplier;
+  // Movement => slider × health multiplier
+  let effSpeed = movementSlider.value() * singularity.movementMultiplier;
   handleKeyboard(effSpeed);
 
-  // 2) Hunt logic => 0.3s if Hard, else 5s
-  let huntThreshold=(hardMode ? HUNT_THRESHOLD_HARD : HUNT_THRESHOLD_NORMAL);
-  huntTimer+=deltaTime;
-  if (huntTimer>=huntThreshold) {
+  // Hunt logic => 0.3s if Hard, else 5s
+  let huntThreshold = hardMode ? HUNT_THRESHOLD_HARD : HUNT_THRESHOLD_NORMAL;
+  huntTimer += deltaTime;
+  if (huntTimer >= huntThreshold) {
     triggerHunt();
     if (randomMode) randomizeSliders();
-    huntTimer=0;
+    huntTimer = 0;
   }
-  huntMeter.attribute("value",huntTimer.toString());
+  huntMeter.attribute("value", huntTimer.toString());
 
-  // 3) Auto Nova => ~3s => kill up to 5
-  autoNovaTimer+=deltaTime;
-  if (autoNovaTimer>=AUTO_NOVA_THRESHOLD) {
+  // AutoNova => ~3s => kill up to 5
+  autoNovaTimer += deltaTime;
+  if (autoNovaTimer >= AUTO_NOVA_THRESHOLD) {
     triggerAutoNovaPulse();
-    autoNovaTimer=0;
+    autoNovaTimer = 0;
   }
-  autoNovaMeter.attribute("value",autoNovaTimer.toString());
+  autoNovaMeter.attribute("value", autoNovaTimer.toString());
 
-  // 4) SuperNova => ~10s
-  if (superNovaTimer<SUPERNOVA_THRESHOLD) {
-    superNovaTimer+=deltaTime;
-    if (superNovaTimer>SUPERNOVA_THRESHOLD) superNovaTimer=SUPERNOVA_THRESHOLD;
+  // SuperNova => ~10s
+  if (superNovaTimer < SUPERNOVA_THRESHOLD) {
+    superNovaTimer += deltaTime;
+    if (superNovaTimer > SUPERNOVA_THRESHOLD) superNovaTimer = SUPERNOVA_THRESHOLD;
   }
-  superNovaMeter.attribute("value",superNovaTimer.toString());
+  superNovaMeter.attribute("value", superNovaTimer.toString());
 
-  // 5) Assimilation => if≥3 => accumulate, else decay
+  // Assimilation => if≥3 => accumulate, else decay
   if (getOrbitCount()>=3) {
-    abyssAccumulator+=deltaTime;
+    abyssAccumulator += deltaTime;
   } else {
-    abyssAccumulator=max(0, abyssAccumulator - deltaTime*0.5);
+    abyssAccumulator = max(0, abyssAccumulator - deltaTime*0.5);
   }
-  if (abyssAccumulator>=ABSYSS_THRESHOLD) {
+  if (abyssAccumulator >= ABSYSS_THRESHOLD) {
     singularity.state="dead";
     explosionType="death";
     explosionTimer=explosionDuration;
@@ -301,10 +304,10 @@ function draw() {
     deathBurstTimer=0;
     abyssAccumulator=ABSYSS_THRESHOLD;
   }
-  abyssMeter.attribute("value",abyssAccumulator.toString());
+  abyssMeter.attribute("value", abyssAccumulator.toString());
 
   if (singularity.state==="dead" && deathBurstCount>0) {
-    deathBurstTimer+=deltaTime;
+    deathBurstTimer += deltaTime;
     if (deathBurstTimer>=300) {
       explosionType="death";
       explosionTimer=explosionDuration;
@@ -313,45 +316,44 @@ function draw() {
     }
   }
 
-  // 6) spawn
-  spawnTimer+=deltaTime;
+  // spawn
+  spawnTimer += deltaTime;
   if (spawnTimer>SPAWN_INTERVAL) {
     spawnTendrils(10);
     spawnTimer=0;
   }
 
-  // 7) update dynamic boundary if "Dynamic" mode
+  // handle wall modes
   if (wallMode==="Dynamic") updateDynamicWall();
-  // push player & tendrils inside boundary if needed
   handleWalls();
 
-  // 8) update & show singularity & tendrils
+  // update & show singularity & tendrils
   singularity.update();
   singularity.show();
   for (let t of tendrils) {
     t.update();
     t.show();
   }
-  tendrils=tendrils.filter(t=>!t.dead);
+  tendrils = tendrils.filter(t=>!t.dead);
 
-  // 9) explosion effect
+  // explosion
   if (explosionTimer>0) {
     drawExplosion();
     explosionTimer-=deltaTime;
   }
 
-  // 10) White flash effect after Burst
+  // White flash after Burst
   if (flashTimer>0) {
     push();
     noFill();
     stroke(255,255,255,150);
     strokeWeight(4);
-    ellipse(singularity.pos.x,singularity.pos.y,singularity.radius*2.2,singularity.radius*2.2);
+    ellipse(singularity.pos.x, singularity.pos.y, singularity.radius*2.2, singularity.radius*2.2);
     pop();
     flashTimer-=deltaTime;
   }
 
-  // If "Dynamic" => draw the boundary circle
+  // draw dynamic boundary if active
   if (wallMode==="Dynamic") drawDynamicWall();
 }
 
@@ -359,7 +361,7 @@ function draw() {
 // 3) HUD
 // -------------------------------------------------------------------
 function createHUD_Bottom() {
-  let controlPanel=createDiv();
+  let controlPanel = createDiv();
   controlPanel.style("position","absolute");
   controlPanel.style("bottom","0");
   controlPanel.style("left","0");
@@ -373,7 +375,7 @@ function createHUD_Bottom() {
   controlPanel.parent(document.body);
 
   // Row1: Attack Buttons
-  let row1=createDiv();
+  let row1 = createDiv();
   row1.parent(controlPanel);
   row1.style("display","flex");
   row1.style("justify-content","center");
@@ -394,7 +396,7 @@ function createHUD_Bottom() {
   burstBtn.style("color","#FFD700");
   burstBtn.mousePressed(()=>{
     triggerRepel();
-    flashTimer=200;
+    flashTimer=200; // white flash
   });
 
   let novaBtn=createButton("Nova");
@@ -519,7 +521,6 @@ function createHUD_Bottom() {
   huntMeter=createElement('meter');
   huntMeter.parent(row5);
   huntMeter.attribute("min","0");
-  // normal threshold=5000, but in Hard Mode we do 300 behind the scenes
   huntMeter.attribute("max",HUNT_THRESHOLD_NORMAL.toString());
   huntMeter.attribute("value","0");
   huntMeter.addClass("desatpurple");
@@ -531,7 +532,7 @@ function createHUD_Bottom() {
   abyssMeter.attribute("value","0");
   abyssMeter.addClass("desatpurple");
 
-  // Row6: Walls => Off/On/Dynamic & screen presets
+  // Row6: Wall Mode + screen presets
   let row6=createDiv();
   row6.parent(controlPanel);
   row6.style("display","flex");
@@ -591,196 +592,22 @@ function createHUD_Bottom() {
 }
 
 // -------------------------------------------------------------------
-// 4) The rest of the logic
+// 5) The rest of the logic
 // -------------------------------------------------------------------
-function resetSimulation() {
-  simulationRunning=true;
-  explosionTimer=0;
-  spawnTimer=0;
-  abyssAccumulator=0;
-  huntTimer=0;
-  autoNovaTimer=0;
-  superNovaTimer=0;
-  flashTimer=0;
-  tendrils=[];
-  singularity=new Singularity(width/2,height/2);
-  for (let i=0;i<TENDRIL_COUNT;i++){
-    let t=new Tendril();
-    t.autoHunt(singularity.pos);
-    tendrils.push(t);
-  }
-}
-
-// spawn
-function spawnTendrils(n=1) {
-  let available=50 - tendrils.length;
-  let toSpawn=min(n,available);
-  for (let i=0;i<toSpawn;i++){
-    let t=new Tendril();
-    t.autoHunt(singularity.pos);
-    tendrils.push(t);
-  }
-}
-
-// Movement: WASD/Arrows => finalSpeed
-function handleKeyboard(finalSpeed) {
-  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) singularity.pos.x-=finalSpeed;
-  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) singularity.pos.x+=finalSpeed;
-  if (keyIsDown(UP_ARROW) || keyIsDown(87))    singularity.pos.y-=finalSpeed;
-  if (keyIsDown(DOWN_ARROW) || keyIsDown(83))  singularity.pos.y+=finalSpeed;
-  singularity.pos.x=constrain(singularity.pos.x, singularity.radius, width - singularity.radius);
-  singularity.pos.y=constrain(singularity.pos.y, singularity.radius, height - singularity.radius);
-}
-
-function keyReleased() {
-  // Space => Burst
-  if (keyCode===32) {
-    triggerRepel();
-    flashTimer=200; // White flash
-  }
-  // V => SuperNova
-  if (keyCode===86) {
-    if (superNovaTimer>=SUPERNOVA_THRESHOLD) {
-      triggerSuperNova();
-      superNovaTimer=0;
-    }
-  }
-}
-
-function triggerHunt() {
-  for (let t of tendrils) {
-    t.hunt(singularity.pos);
-  }
-}
-
-function triggerRepel() {
-  for (let t of tendrils) {
-    let d=p5.Vector.dist(t.pos,singularity.pos);
-    if (d<ORBIT_DISTANCE && !t.immolating) {
-      let repulse=p5.Vector.sub(t.pos,singularity.pos).normalize().mult(18);
-      t.vel=repulse.copy();
-    }
-  }
-  explosionType="burst";
-  explosionTimer=explosionDuration;
-}
-
-// Auto Nova => kill up to 5
-function triggerAutoNovaPulse() {
-  let count=0;
-  for (let t of tendrils) {
-    let d=p5.Vector.dist(t.pos,singularity.pos);
-    if (d<ORBIT_DISTANCE && !t.immolating) {
-      t.startImmolation();
-      count++;
-      if (count>=5) break;
-    }
-  }
-  explosionType="nova";
-  explosionTimer=explosionDuration;
-}
-
-// SuperNova => kills all in orbit
-function triggerSuperNova() {
-  for (let t of tendrils) {
-    let d=p5.Vector.dist(t.pos,singularity.pos);
-    if (d<ORBIT_DISTANCE && !t.immolating) {
-      t.startImmolation();
-    }
-  }
-  explosionType="supernova";
-  explosionTimer=explosionDuration*1.5;
-}
-
-// Count how many are in orbit
-function getOrbitCount() {
-  let c=0;
-  for (let t of tendrils) {
-    let d=p5.Vector.dist(t.pos,singularity.pos);
-    if (d<ORBIT_DISTANCE) c++;
-  }
-  return c;
-}
-
-function randomizeSliders() {
-  agroSlider.value(random(0,5));
-  gravitySlider.value(random(0,5));
-  movementSlider.value(random(0,5));
-}
-
-// Touch logic: left side => movement, right side => short tap => burst, long => superNova
-function touchStarted() {
-  if (touches.length>0) {
-    let t=touches[0];
-    if (t.x<width*0.5) {
-      leftTouchActive=true;
-      leftTouchPrevX=t.x;
-      leftTouchPrevY=t.y;
-    } else {
-      rightTouchActive=true;
-      rightTouchStartTime=millis();
-    }
-  }
-}
-
-function touchMoved() {
-  if (touches.length>0) {
-    let t=touches[0];
-    if (leftTouchActive && t.x<width*0.5) {
-      let dx=t.x-leftTouchPrevX;
-      let dy=t.y-leftTouchPrevY;
-      let factor=movementSlider.value()*singularity.movementMultiplier;
-      singularity.pos.x+=dx*factor;
-      singularity.pos.y+=dy*factor;
-      leftTouchPrevX=t.x;
-      leftTouchPrevY=t.y;
-    }
-  }
-  return false;
-}
-
-function touchEnded() {
-  if (rightTouchActive) {
-    let holdTime=millis()-rightTouchStartTime;
-    if (holdTime>=HOLD_THRESHOLD) {
-      // if meter is full => superNova
-      if (superNovaTimer>=SUPERNOVA_THRESHOLD) {
-        triggerSuperNova();
-        superNovaTimer=0;
-      }
-    } else {
-      // short tap => burst
-      triggerRepel();
-      flashTimer=200;
-    }
-  }
-  leftTouchActive=false;
-  rightTouchActive=false;
-}
-
-// -------------------------------------------------------------------
-// 5) Dynamic Wall Logic
-// -------------------------------------------------------------------
-let dynamicRadiusBase=0;      // half the smaller dimension
-let dynamicRadius=0;          // current radius
-let dynamicState="shrinking"; // "shrinking"/"expanding"
-let dynamicTimer=0;           // tracks 0..DYNAMIC_CYCLE_TIME
-
 function updateDynamicWall() {
-  // Increase dynamicTimer each frame
   dynamicTimer+=deltaTime;
   let t=dynamicTimer/DYNAMIC_CYCLE_TIME; // 0..1
   if (dynamicState==="shrinking") {
-    // radius goes from 1.0 => 0.3
-    let frac=lerp(DYNAMIC_MAX_FRAC,DYNAMIC_MIN_FRAC,t);
+    // radius from 1 => 0.3
+    let frac=lerp(DYNAMIC_MAX_FRAC, DYNAMIC_MIN_FRAC, t);
     dynamicRadius=dynamicRadiusBase*frac;
     if (dynamicTimer>=DYNAMIC_CYCLE_TIME) {
       dynamicState="expanding";
       dynamicTimer=0;
     }
   } else {
-    // expanding => 0.3 => 1.0
-    let frac=lerp(DYNAMIC_MIN_FRAC,DYNAMIC_MAX_FRAC,t);
+    // expanding => 0.3 => 1
+    let frac=lerp(DYNAMIC_MIN_FRAC, DYNAMIC_MAX_FRAC, t);
     dynamicRadius=dynamicRadiusBase*frac;
     if (dynamicTimer>=DYNAMIC_CYCLE_TIME) {
       dynamicState="shrinking";
@@ -792,27 +619,28 @@ function updateDynamicWall() {
 function drawDynamicWall() {
   push();
   noFill();
-  // color intensifies if shrinking, fades if expanding
   let alphaVal=(dynamicState==="shrinking")?180:100;
   stroke(128,0,128, alphaVal);
   strokeWeight(3);
-  ellipse(width*0.5,height*0.5,dynamicRadius*2,dynamicRadius*2);
+  ellipse(width*0.5, height*0.5, dynamicRadius*2, dynamicRadius*2);
   pop();
 }
 
 function handleWalls() {
-  // if wallMode="Off" => do nothing
+  // if wallMode="Off" => no bounding
   // if wallMode="On" => bounding box
   // if wallMode="Dynamic" => bounding circle
-  if (wallMode==="Off") {
-    // do nothing
-  } else if (wallMode==="On") {
-    // bounding box
-    if (singularity.pos.x<0) {singularity.pos.x=0; }
-    if (singularity.pos.x>width) {singularity.pos.x=width; }
-    if (singularity.pos.y<0) {singularity.pos.y=0; }
-    if (singularity.pos.y>height) {singularity.pos.y=height; }
+  if (wallMode==="Off") return;
 
+  if (wallMode==="On") {
+    // bounding box
+    // push Singularity in
+    if (singularity.pos.x<0) {singularity.pos.x=0;}
+    if (singularity.pos.x>width) {singularity.pos.x=width;}
+    if (singularity.pos.y<0) {singularity.pos.y=0;}
+    if (singularity.pos.y>height) {singularity.pos.y=height;}
+
+    // push tendrils in
     for (let t of tendrils) {
       if (t.pos.x<0) {t.pos.x=0; t.vel.x*=-1;}
       if (t.pos.x>width) {t.pos.x=width; t.vel.x*=-1;}
@@ -820,8 +648,7 @@ function handleWalls() {
       if (t.pos.y>height) {t.pos.y=height; t.vel.y*=-1;}
     }
   } else if (wallMode==="Dynamic") {
-    // bounding circle => center is (width/2,height/2), radius=dynamicRadius
-    // if outside => push inside
+    // circle => center is (width/2,height/2), radius=dynamicRadius
     let center=createVector(width*0.5,height*0.5);
 
     // singularity
@@ -835,10 +662,10 @@ function handleWalls() {
     // tendrils
     for (let t of tendrils) {
       let dt=p5.Vector.dist(t.pos,center);
+      // if outside => push inside
       if (dt>dynamicRadius) {
-        // push inside
         let push=p5.Vector.sub(center,t.pos);
-        push.setMag(dt-dynamicRadius);
+        push.setMag(dt - dynamicRadius);
         t.pos.add(push);
       }
     }
