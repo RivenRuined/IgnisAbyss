@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Ignis x Abyss – Life x Death</title>
     <style>
-      /* Nova/SuperNova meters: fill color cyan, empty gauge black */
+      /* AutoNova & SuperNova meters: cyan fill, black background */
       meter.cyanMeter::-webkit-meter-bar {
          background: black;
       }
@@ -15,7 +15,7 @@
          background: black;
       }
 
-      /* Hunt and Assimilation meters: fill color desaturated purple, empty gauge black */
+      /* Hunt & Assimilation meters: desaturated purple fill, black background */
       meter.desatpurple::-webkit-meter-bar {
          background: black;
       }
@@ -29,7 +29,7 @@
     <!-- p5 libraries -->
     <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/p5.dom@1.0.0/lib/p5.dom.js"></script>
-    <!-- Must match exactly "Ignis.js" in same folder -->
+    <!-- Must match exactly "Ignis.js" in the same folder -->
     <script src="Ignis.js"></script>
   </head>
   <body style="margin:0; padding:0; background:#000;">
@@ -37,9 +37,8 @@
       Ignis x Abyss – Life x Death
     </h1>
     <p style="margin:0; padding:10px; color:white;">
-      Final build: AutoNova pulses (3s) & SuperNova (10s), plus manual Burst & Nova triggers.<br/>
-      Controls: WSAD/Arrow keys, touchscreen, & D-Pad. 
-      Space => Burst, V => SuperNova. 
+      AutoNova pulses (3s) &amp; SuperNova (10s), plus manual Burst &amp; Nova triggers.<br/>
+      WASD/Arrow keys, touchscreen. Space => Burst, V => SuperNova.
     </p>
   </body>
 </html>
