@@ -1,4 +1,4 @@
-console.log("Ignis.js loaded and running!!!");
+console.log("Ignis.js loaded and running!");
 
 /*
   Ignis x Abyss – Life x Death
@@ -633,4 +633,145 @@ function triggerHunt() {
 function triggerRepel() {
   for (let t of tendrils) {
     let d=p5.Vector.dist(t.pos, singularity.pos);
-    if (d<ORBIT_DISTAN
+    if (d<ORBIT_DISTANCE && !t.immolating) {
+      let repulse=p5.Vector.sub(t.pos, singularity.pos).normalize().mult(18);
+      t.vel=repulse.copy();
+    }
+  }
+  explosionType="burst";
+  explosionTimer=explosionDuration;
+}
+
+function triggerAutoNovaPulse() {
+  let count=0;
+  for (let t of tendrils) {
+    let d=p5.Vector.dist(t.pos, singularity.pos);
+    if (d<ORBIT_DISTANCE && !t.immolating) {
+      t.startImmolation();
+      count++;
+      if (count>=5) break;
+    }
+  }
+  explosionType="nova";
+  explosionTimer=explosionDuration;
+}
+
+function triggerSuperNova() {
+  for (let t of tendrils) {
+    let d=p5.Vector.dist(t.pos, singularity.pos);
+    if (d<ORBIT_DISTANCE && !t.immolating) {
+      t.startImmolation();
+    }
+  }
+  explosionType="supernova";
+  explosionTimer=explosionDuration*1.5;
+}
+
+function getOrbitCount() {
+  let c=0;
+  for (let t of tendrils) {
+    let d=p5.Vector.dist(t.pos, singularity.pos);
+    if (d<ORBIT_DISTANCE) c++;
+  }
+  return c;
+}
+
+function randomizeSliders() {
+  agroSlider.value(random(0,5));
+  gravitySlider.value(random(0,5));
+  movementSlider.value(random(0,5));
+}
+
+// Basic multi-touch logic left side => movement, right side => short tap => burst, long => superNova
+function touchStarted() {
+  if (touches.length>0) {
+    let t=touches[0];
+    if (t.x<width*0.5) {
+      leftTouchActive=true;
+      leftTouchPrevX=t.x;
+      leftTouchPrevY=t.y;
+    } else {
+      rightTouchActive=true;
+      rightTouchStartTime=millis();
+    }
+  }
+}
+
+function touchMoved() {
+  if (touches.length>0) {
+    let t=touches[0];
+    if (leftTouchActive && t.x<width*0.5) {
+      let dx=t.x-leftTouchPrevX;
+      let dy=t.y-leftTouchPrevY;
+      let factor=movementSlider.value()*singularity.movementMultiplier;
+      singularity.pos.x+=dx*factor;
+      singularity.pos.y+=dy*factor;
+      leftTouchPrevX=t.x;
+      leftTouchPrevY=t.y;
+    }
+  }
+  return false;
+}
+
+function touchEnded() {
+  if (rightTouchActive) {
+    let holdTime=millis()-rightTouchStartTime;
+    if (holdTime>=HOLD_THRESHOLD) {
+      if (superNovaTimer>=SUPERNOVA_THRESHOLD) {
+        triggerSuperNova();
+        superNovaTimer=0;
+      }
+    } else {
+      triggerRepel();
+      flashTimer=200;
+    }
+  }
+  leftTouchActive=false;
+  rightTouchActive=false;
+}
+
+// Explosion effect
+function drawExplosion() {
+  push();
+  translate(singularity.pos.x, singularity.pos.y);
+  let steps=5;
+  let alphaVal=map(explosionTimer,0,explosionDuration,0,255);
+  let pulse=map(sin(frameCount*0.1),-1,1,0.8,1.2);
+
+  let len;
+  if (explosionType==="burst") {
+    stroke(255,215,0, alphaVal);
+    len=random(20,50);
+  } else if (explosionType==="nova") {
+    stroke(0,255,255, alphaVal);
+    len=random(20,50);
+  } else if (explosionType==="supernova") {
+    stroke(0,255,255, alphaVal);
+    len=random(40,90);
+  } else if (explosionType==="death") {
+    // Pink assimilation => half size, alpha*0.7, pulsing
+    stroke(255,0,255, alphaVal*0.7);
+    len=random(20,50)*0.5*pulse;
+  } else {
+    stroke(255,215,0, alphaVal);
+    len=random(20,50);
+  }
+  noFill();
+  for (let i=0;i<20;i++){
+    push();
+    rotate(random(TWO_PI));
+    beginShape();
+    vertex(0,0);
+    for (let j=0;j<steps;j++){
+      let angle=random(-Math.PI/4,Math.PI/4);
+      let x=cos(angle)*len;
+      let y=sin(angle)*len;
+      vertex(x,y);
+    }
+    endShape();
+    pop();
+  }
+  pop();
+}
+
+// End of Ignis.js (Make sure you copied everything!)
